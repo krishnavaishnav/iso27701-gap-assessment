@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISO 27701:2025 Gap Assessment Tool</title>
+  <meta name="description" content="Free, open-source ISO/IEC 27701:2025 Privacy Information Management System gap assessment tool. Rate all 78 controls across Annex A.1, A.2, and A.3." />
+  <meta property="og:title" content="ISO 27701:2025 Gap Assessment Tool" />
+  <meta property="og:description" content="Free open-source PIMS gap assessment. Rate 78 controls, export CSV, track compliance score." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #ffffff; --bg-secondary: #f5f5f4; --bg-tertiary: #f0efed;
+      --text: #1a1a18; --text-secondary: #6b6b67; --text-tertiary: #9b9b96;
+      --border: rgba(0,0,0,0.12); --border-md: rgba(0,0,0,0.22); --border-strong: rgba(0,0,0,0.35);
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+      --blue: #185FA5; --blue-light: #E6F1FB; --blue-mid: #B5D4F4; --blue-dark: #0C447C;
+      --green: #3B6D11; --green-light: #EAF3DE; --green-border: #639922;
+      --amber: #854F0B; --amber-light: #FAEEDA; --amber-border: #BA7517;
+      --red: #A32D2D; --red-light: #FCEBEB; --red-border: #E24B4A;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a; --bg-secondary: #252523; --bg-tertiary: #2e2e2b;
+        --text: #f0efec; --text-secondary: #a0a09b; --text-tertiary: #6e6e6a;
+        --border: rgba(255,255,255,0.10); --border-md: rgba(255,255,255,0.18); --border-strong: rgba(255,255,255,0.28);
+        --blue: #378ADD; --blue-light: #0c2a42; --blue-mid: #1a4a6e; --blue-dark: #85B7EB;
+        --green: #97C459; --green-light: #173404; --green-border: #3B6D11;
+        --amber: #EF9F27; --amber-light: #412402; --amber-border: #854F0B;
+        --red: #F09595; --red-light: #501313; --red-border: #A32D2D;
+      }
+    }
+    html { font-size: 16px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg-tertiary); color: var(--text); line-height: 1.5; min-height: 100vh; }
+    .site-header { background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 0 2rem; position: sticky; top: 0; z-index: 100; }
+    .site-header-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 12px; height: 56px; }
+    .site-logo { font-size: 15px; font-weight: 600; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .site-logo-icon { width: 28px; height: 28px; background: var(--blue); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .header-badge { font-size: 11px; background: var(--blue-light); color: var(--blue-dark); padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+    .header-links { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+    .save-indicator { font-size: 11px; color: var(--text-tertiary); display: flex; align-items: center; gap: 4px; transition: opacity 0.4s; }
+    .save-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-border); }
+    .github-btn { display: flex; align-items: center; gap: 6px; background: var(--bg-secondary); border: 0.5px solid var(--border-md); border-radius: var(--radius-sm); padding: 5px 12px; font-size: 13px; font-weight: 500; color: var(--text); text-decoration: none; }
+    .github-btn:hover { background: var(--bg-tertiary); }
+    .main { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    .hero { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 2rem; margin-bottom: 1.5rem; }
+    .hero h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+    .hero p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; max-width: 640px; }
+    .hero-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .tag { font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 20px; background: var(--bg-secondary); color: var(--text-secondary); border: 0.5px solid var(--border); }
+    .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1rem; display: flex; align-items: center; gap: 6px; }
+    .card-title-num { width: 20px; height: 20px; background: var(--blue); color: white; border-radius: 50%; font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .role-btn { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; cursor: pointer; text-align: left; color: var(--text); transition: all 0.15s; }
+    .role-btn:hover { border-color: var(--border-strong); }
+    .role-btn.active { border: 2px solid var(--blue); background: var(--blue-light); }
+    .role-btn-icon { font-size: 20px; margin-bottom: 6px; }
+    .role-btn-name { font-size: 13px; font-weight: 600; }
+    .role-btn.active .role-btn-name { color: var(--blue-dark); }
+    .role-btn-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+    .role-btn.active .role-btn-sub { color: var(--blue); }
+    .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 1rem; }
+    .metric { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 12px 14px; }
+    .metric-val { font-size: 24px; font-weight: 600; }
+    .metric-lbl { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .progress-track { background: var(--bg-tertiary); border-radius: 4px; height: 5px; margin-top: 6px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+    .info-box { background: var(--blue-light); border: 0.5px solid var(--blue-mid); border-radius: var(--radius-md); padding: 10px 14px; font-size: 12px; color: var(--blue-dark); margin-bottom: 1rem; line-height: 1.5; }
+    .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-label { font-size: 12px; color: var(--text-secondary); }
+    .filter-btn { padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: var(--bg-secondary); cursor: pointer; color: var(--text-secondary); transition: all 0.1s; }
+    .filter-btn.active { background: var(--bg); color: var(--text); border-color: var(--border-strong); font-weight: 500; }
+    .spacer { flex: 1; }
+    .btn-tool { display: flex; align-items: center; gap: 6px; background: var(--bg); border: 0.5px solid var(--border-md); border-radius: var(--radius-sm); padding: 7px 14px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; }
+    .btn-tool:hover { background: var(--bg-secondary); }
+    .tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--border); margin-bottom: 1rem; }
+    .tab-btn { padding: 9px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: all 0.1s; }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-badge { display: inline-block; background: var(--bg-secondary); color: var(--text-tertiary); font-size: 10px; border-radius: 10px; padding: 1px 6px; margin-left: 4px; font-weight: 400; }
+    .tab-btn.active .tab-badge { background: var(--blue-light); color: var(--blue); }
+    .domain-header { font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.07em; padding: 14px 0 8px; border-bottom: 0.5px solid var(--border); margin-bottom: 2px; }
+    .control-row { display: grid; grid-template-columns: 76px 1fr auto; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+    .control-row:last-child { border-bottom: none; }
+    .ctrl-id { font-size: 11px; font-weight: 600; color: var(--text-tertiary); font-family: 'SFMono-Regular','Consolas',monospace; padding-top: 3px; }
+    .ctrl-name { font-size: 13px; font-weight: 500; }
+    .ctrl-desc { font-size: 12px; color: var(--text-secondary); margin-top: 3px; line-height: 1.45; }
+    .ctrl-gap { font-size: 11px; color: var(--red); margin-top: 4px; font-style: italic; }
+    .ctrl-status { display: flex; gap: 4px; flex-shrink: 0; padding-top: 2px; }
+    .status-btn { width: 30px; height: 30px; border-radius: var(--radius-sm); border: 0.5px solid var(--border-md); background: var(--bg-secondary); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.1s; flex-shrink: 0; }
+    .status-btn:hover { border-color: var(--border-strong); transform: scale(1.08); }
+    .status-btn.active-impl { background: var(--green-light); border: 1.5px solid var(--green-border); }
+    .status-btn.active-part { background: var(--amber-light); border: 1.5px solid var(--amber-border); }
+    .status-btn.active-none { background: var(--red-light); border: 1.5px solid var(--red-border); }
+    .status-btn.active-na { background: var(--bg-tertiary); border: 1.5px solid var(--border-strong); opacity: 0.7; }
+    .na-text { font-size: 9px; font-weight: 600; color: var(--text-secondary); }
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-tertiary); font-size: 13px; }
+    .site-footer { text-align: center; padding: 2rem; font-size: 12px; color: var(--text-tertiary); border-top: 0.5px solid var(--border); margin-top: 2rem; }
+    .site-footer a { color: var(--text-secondary); }
+    @media (max-width: 640px) {
+      .main { padding: 1rem; } .role-grid { grid-template-columns: 1fr; } .metrics-grid { grid-template-columns: repeat(2,1fr); }
+      .control-row { grid-template-columns: 60px 1fr; } .ctrl-status { grid-column: 1/-1; } .site-header { padding: 0 1rem; } .header-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="site-logo" href="/">
+      <span class="site-logo-icon">🔐</span>
+      ISO 27701:2025
+    </a>
+    <span class="header-badge">Gap Assessment</span>
+    <div class="header-links">
+      <span class="save-indicator" id="saveIndicator"><span class="save-dot"></span>Auto-saved</span>
+      <a class="github-btn" href="https://github.com/YOUR-USERNAME/iso27701-gap-assessment" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="hero">
+    <h1>ISO/IEC 27701:2025 Gap Assessment</h1>
+    <p>Rate your organisation's implementation across all applicable Annex A controls. Free, open-source, runs entirely in your browser — no data leaves your device.</p>
+    <div class="hero-tags">
+      <span class="tag">78 controls</span>
+      <span class="tag">A.1 Controller · A.2 Processor · A.3 Shared security</span>
+      <span class="tag">GDPR aligned</span>
+      <span class="tag">Export to CSV</span>
+      <span class="tag">Auto-saves locally</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-title-num">1</span>Select your organisation's role</div>
+    <div class="role-grid" role="radiogroup" aria-label="Organisation role">
+      <button class="role-btn" onclick="setRole('controller')" id="role-controller" role="radio" aria-checked="false">
+        <div class="role-btn-icon">🗄️</div>
+        <div class="role-btn-name">PII controller</div>
+        <div class="role-btn-sub">60 controls (A.1 + A.3)</div>
+      </button>
+      <button class="role-btn" onclick="setRole('processor')" id="role-processor" role="radio" aria-checked="false">
+        <div class="role-btn-icon">⚙️</div>
+        <div class="role-btn-name">PII processor</div>
+        <div class="role-btn-sub">47 controls (A.2 + A.3)</div>
+      </button>
+      <button class="role-btn active" onclick="setRole('both')" id="role-both" role="radio" aria-checked="true">
+        <div class="role-btn-icon">🔄</div>
+        <div class="role-btn-name">Both roles</div>
+        <div class="role-btn-sub">78 controls (A.1 + A.2 + A.3)</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="card-title-num">2</span>Rate each control</div>
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="metric-val" id="metScore" style="color:var(--green)">0%</div>
+        <div class="metric-lbl">Compliance score</div>
+        <div class="progress-track"><div class="progress-fill" id="scoreBar" style="width:0%;background:var(--green-border)"></div></div>
+      </div>
+      <div class="metric"><div class="metric-val" id="metImpl" style="color:var(--green)">0</div><div class="metric-lbl">✅ Implemented</div></div>
+      <div class="metric"><div class="metric-val" id="metPart" style="color:var(--amber)">0</div><div class="metric-lbl">🟡 Partial</div></div>
+      <div class="metric"><div class="metric-val" id="metNone" style="color:var(--red)">0</div><div class="metric-lbl">❌ Not implemented</div></div>
+    </div>
+    <div class="info-box">
+      <strong>How to rate:</strong> Click ✅ Implemented · 🟡 Partial · ❌ Not implemented · N/A (exclude and document in your SoA). Click again to clear. Progress is auto-saved in your browser.
+    </div>
+    <div class="toolbar">
+      <span class="filter-label">Show:</span>
+      <button class="filter-btn active" onclick="setFilter('all')" id="filter-all">All controls</button>
+      <button class="filter-btn" onclick="setFilter('none')" id="filter-none">❌ Gaps only</button>
+      <button class="filter-btn" onclick="setFilter('part')" id="filter-part">🟡 Partial</button>
+      <button class="filter-btn" onclick="setFilter('unrated')" id="filter-unrated">⬜ Unrated</button>
+      <div class="spacer"></div>
+      <button class="btn-tool" onclick="resetAll()" style="font-weight:400;color:var(--text-secondary)">↺ Reset</button>
+      <button class="btn-tool" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" role="tab" aria-selected="true" onclick="setTab('a1')" id="tab-a1">A.1 — Controller <span class="tab-badge" id="badge-a1">31</span></button>
+      <button class="tab-btn" role="tab" aria-selected="false" onclick="setTab('a2')" id="tab-a2">A.2 — Processor <span class="tab-badge" id="badge-a2">18</span></button>
+      <button class="tab-btn" role="tab" aria-selected="false" onclick="setTab('a3')" id="tab-a3">A.3 — Shared security <span class="tab-badge" id="badge-a3">29</span></button>
+    </div>
+    <div id="panel-a1" role="tabpanel"></div>
+    <div id="panel-a2" role="tabpanel" hidden></div>
+    <div id="panel-a3" role="tabpanel" hidden></div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <p>Open source · MIT licence · <a href="https://github.com/YOUR-USERNAME/iso27701-gap-assessment" target="_blank" rel="noopener">GitHub</a> · Based on ISO/IEC 27701:2025 (published October 2025)</p>
+  <p style="margin-top:6px">Not legal advice. ISO 27701 certification does not constitute a GDPR safe harbour.</p>
+</footer>
+
+<script>
+const CONTROLS = {
+  a1:[
+    {domain:"A.1.2 — Conditions for collection and processing",controls:[
+      {id:"A.1.2.2",name:"Identify and document purpose",desc:"Document specific purposes for PII collection before collection begins.",gap:"Vague or catch-all purpose statements; purposes undocumented in RoPA."},
+      {id:"A.1.2.3",name:"Identify lawful basis",desc:"Map a lawful basis to each processing activity (consent, contract, legitimate interest, etc.).",gap:"No per-activity lawful basis mapping; LIA not completed for legitimate interest claims."},
+      {id:"A.1.2.4",name:"Determine consent",desc:"Define when/how consent is obtained; ensure freely given, specific, informed, unambiguous.",gap:"Pre-ticked boxes; bundled consent; no record of when consent was obtained."},
+      {id:"A.1.2.5",name:"Obtain and record consent",desc:"Implement mechanisms to capture, record, and maintain proof of consent.",gap:"No consent audit trail; inability to retrieve consent records for specific individuals."},
+      {id:"A.1.2.6",name:"Privacy impact assessment",desc:"Conduct PIAs/DPIAs for new or significantly changed processing; document findings.",gap:"PIA process exists but not triggered consistently; no DPIA for high-risk processing."},
+      {id:"A.1.2.7",name:"Contracts with PII processors",desc:"Engage all PII processors under a written DPA specifying obligations.",gap:"Processor contracts missing; legacy contracts without GDPR-compliant DPA clauses."},
+      {id:"A.1.2.8",name:"Joint PII controller",desc:"Document joint controller arrangements and each party's obligations.",gap:"Joint controller arrangement undocumented; responsibilities undefined."},
+      {id:"A.1.2.9",name:"Records of processing PII",desc:"Maintain complete Records of Processing Activities (RoPA) for all operations.",gap:"RoPA incomplete, out of date, or not maintained; no process to update on system changes."},
+    ]},
+    {domain:"A.1.3 — Obligations to PII principals",controls:[
+      {id:"A.1.3.2",name:"Obligations to PII principals",desc:"Establish and document obligations to PII principals and mechanisms to meet them.",gap:"No documented obligations register; rights not mapped to processes."},
+      {id:"A.1.3.3",name:"Information for PII principals",desc:"Determine what information must be provided before or at point of collection.",gap:"Privacy notice does not cover all required information elements."},
+      {id:"A.1.3.4",name:"Providing information",desc:"Provide required information clearly and accessibly (typically via privacy notice).",gap:"Privacy notice not easy to find; information presented in complex legal language."},
+      {id:"A.1.3.5",name:"Modify or withdraw consent",desc:"Provide a mechanism to modify or withdraw consent without detriment.",gap:"No withdrawal mechanism; withdrawal treated as deletion rather than consent change."},
+      {id:"A.1.3.6",name:"Object to PII processing",desc:"Provide mechanism for PII principals to object to processing.",gap:"No documented objection process; no SLA for response."},
+      {id:"A.1.3.7",name:"Access, correction or erasure",desc:"Provide mechanism for access, correction, and erasure requests (right to be forgotten).",gap:"No DSR workflow; erasure requests not propagated to all systems."},
+      {id:"A.1.3.8",name:"Inform third parties",desc:"Notify third parties when PII is corrected or erased.",gap:"No process to track and notify third parties after correction/erasure."},
+      {id:"A.1.3.9",name:"Providing copy of PII",desc:"Provide PII principals with a copy of their PII upon request (data portability).",gap:"No automated or streamlined way to fulfil subject access requests."},
+      {id:"A.1.3.10",name:"Handling requests",desc:"Process, track, authenticate and respond to all DSR types within required timescales.",gap:"Requests handled ad hoc; no SLA tracking; identity verification process missing."},
+      {id:"A.1.3.11",name:"Automated decision making",desc:"Disclose automated decision-making with significant effects; provide human review option.",gap:"Automated decisions undisclosed; no opt-out or appeal mechanism."},
+    ]},
+    {domain:"A.1.4 — Privacy by design and by default",controls:[
+      {id:"A.1.4.2",name:"Limit collection",desc:"Collect only PII necessary for the stated purpose (data minimisation).",gap:"Collecting more fields than required; no data minimisation review in product design."},
+      {id:"A.1.4.3",name:"Limit processing",desc:"Process PII only for the stated purpose; prevent secondary use without additional basis.",gap:"Processing PII for analytics or profiling beyond original purpose."},
+      {id:"A.1.4.4",name:"Accuracy and quality",desc:"Maintain accuracy of PII; provide mechanisms for correction.",gap:"No data quality validation; no user self-service correction mechanism."},
+      {id:"A.1.4.5",name:"PII minimisation",desc:"Apply systematic controls to minimise the amount of PII held and processed.",gap:"No PII minimisation checklist in SDLC; fields not reviewed for necessity."},
+      {id:"A.1.4.6",name:"De-identification and deletion",desc:"Implement de-identification and deletion procedures when PII is no longer needed.",gap:"No automated deletion; PII retained indefinitely in test environments."},
+      {id:"A.1.4.7",name:"Temporary files",desc:"Ensure temporary files containing PII are securely managed and deleted when no longer needed.",gap:"Temp files, logs, and cache containing PII not covered by retention/deletion policy."},
+      {id:"A.1.4.8",name:"Retention",desc:"Define and implement data retention schedules aligned to legal obligations.",gap:"No retention schedule; all data kept indefinitely; retention schedule not enforced."},
+      {id:"A.1.4.9",name:"Disposal",desc:"Securely dispose of PII at end of retention period; document disposal.",gap:"No secure deletion process; PII disposed with general data."},
+      {id:"A.1.4.10",name:"PII transmission controls",desc:"Apply controls to protect PII in transit (encryption, secure channels, access controls).",gap:"PII transmitted over unencrypted channels; no controls on email transmission of PII."},
+    ]},
+    {domain:"A.1.5 — PII sharing, transfer and disclosure",controls:[
+      {id:"A.1.5.2",name:"Identifying basis for PII transfer",desc:"Document the legal basis for transfers of PII to third countries or international organizations.",gap:"International transfers not mapped to legal transfer mechanism (SCCs, adequacy, etc.)."},
+      {id:"A.1.5.3",name:"Countries and organisations for PII transfer",desc:"Document countries/organizations to which PII is transferred; verify adequacy decisions or safeguards.",gap:"Data residency commitments made but not enforced; transfer destinations undocumented."},
+      {id:"A.1.5.4",name:"Records of PII disclosures",desc:"Maintain records of all disclosures of PII to third parties.",gap:"No disclosure log maintained; disclosures not tracked consistently."},
+      {id:"A.1.5.5",name:"Notification of PII disclosure requests",desc:"Establish a process for handling third-party requests for PII disclosure.",gap:"No process to handle government/law enforcement access requests."},
+    ]},
+  ],
+  a2:[
+    {domain:"A.2.2 — Conditions for collection and processing",controls:[
+      {id:"A.2.2.2",name:"Organisation's purposes",desc:"Process PII only for purposes specified in the controller's instructions.",gap:"Processor using PII for own analytics or product improvement without controller consent."},
+      {id:"A.2.2.3",name:"Use limitation",desc:"Ensure PII is not used for any purpose other than that instructed by the controller.",gap:"Staff accessing PII outside of defined processing scope."},
+      {id:"A.2.2.4",name:"Information to PII principals",desc:"Provide information to PII principals only as instructed or as legally required.",gap:"Processor responding to individuals without controller approval."},
+      {id:"A.2.2.5",name:"Controller obligations",desc:"Assist the controller in fulfilling obligations; notify if instructions appear to infringe applicable law.",gap:"No escalation process when controller instructions appear unlawful."},
+      {id:"A.2.2.6",name:"Customer obligations",desc:"Assist the controller in meeting obligations to PII principals (DSRs, DPIAs, breach notification).",gap:"No defined process to support controller's DSR fulfilment within contractual timeframes."},
+      {id:"A.2.2.7",name:"Records of processing PII",desc:"Maintain records of all processing activities carried out on behalf of each controller.",gap:"No per-controller processing records; single combined log not sufficient."},
+    ]},
+    {domain:"A.2.3 — Obligations to PII principals",controls:[
+      {id:"A.2.3.2",name:"Obligations to PII principals",desc:"Where the processor interacts with PII principals, fulfil controller-defined obligations; redirect inquiries appropriately.",gap:"Processor staff unaware of how to handle DSR inquiries received directly."},
+    ]},
+    {domain:"A.2.4 — Privacy by design and by default",controls:[
+      {id:"A.2.4.2",name:"Temporary files",desc:"Ensure temporary files created during processing are managed and deleted per agreed schedules.",gap:"Temporary processing files retained beyond task completion."},
+      {id:"A.2.4.3",name:"Return, transfer or disposal of PII",desc:"Upon termination of processing agreement, return or securely dispose of all PII as instructed.",gap:"No offboarding procedure; PII retained after contract end."},
+      {id:"A.2.4.4",name:"PII transmission controls",desc:"Apply controls to protect PII in transit during processing operations.",gap:"PII transmitted without encryption between processor subsystems."},
+    ]},
+    {domain:"A.2.5 — PII sharing, transfer and disclosure",controls:[
+      {id:"A.2.5.2",name:"Basis for PII transfer",desc:"Identify and document the legal basis for any transfer of PII to a third country.",gap:"Sub-processor transfers not mapped to legal transfer mechanism."},
+      {id:"A.2.5.3",name:"Countries for PII transfer",desc:"Document countries/international organizations to which PII is transferred.",gap:"Data residency commitments made but not enforced; sub-processor locations undocumented."},
+      {id:"A.2.5.4",name:"Records of PII disclosures",desc:"Maintain records of all disclosures of PII to third parties.",gap:"Disclosure log not maintained at processor level."},
+      {id:"A.2.5.5",name:"Notification of PII disclosure requests",desc:"Notify the controller before disclosing PII to a third party where legally permitted.",gap:"No process to notify controllers of government/law enforcement access requests."},
+      {id:"A.2.5.6",name:"Legally binding PII disclosures",desc:"Where legally compelled to disclose PII, notify the controller where permitted and record the disclosure.",gap:"Disclosures made without notifying controller; no legal review process."},
+      {id:"A.2.5.7",name:"Disclosure of subcontractors",desc:"Disclose to the controller the identity and location of all sub-processors used.",gap:"Sub-processor list not maintained or shared with controllers."},
+      {id:"A.2.5.8",name:"Engagement of a subcontractor",desc:"Obtain controller authorization before engaging a new sub-processor; flow down data protection obligations.",gap:"Sub-processors engaged without controller authorization; no data protection clauses in sub-processor contracts."},
+      {id:"A.2.5.9",name:"Change of subcontractor",desc:"Notify the controller in advance of any changes to sub-processors; provide opportunity to object.",gap:"Controllers not notified of sub-processor changes; no prior notice mechanism."},
+    ]},
+  ],
+  a3:[
+    {domain:"A.3 — Shared information security controls",controls:[
+      {id:"A.3.3",name:"Information security policies",desc:"Policies must explicitly address privacy and PII protection.",gap:"Security policy exists but does not reference PII handling or privacy obligations."},
+      {id:"A.3.4",name:"Security roles",desc:"Define privacy-relevant security roles; ensure DPO/privacy officer interactions.",gap:"No defined DPO or privacy officer; security and privacy responsibilities unclear."},
+      {id:"A.3.5",name:"Classification of information",desc:"PII must be classified appropriately to drive correct handling controls.",gap:"PII not identified as a classification tier; handled the same as general business data."},
+      {id:"A.3.6",name:"Labelling of information",desc:"Label PII-containing assets so handling controls are applied consistently.",gap:"No labelling scheme applied to datasets, files, or systems containing PII."},
+      {id:"A.3.7",name:"Information transfer",desc:"Controls on transferring PII between systems, people, and organizations.",gap:"PII sent by email without encryption; no approved transfer channels policy."},
+      {id:"A.3.8",name:"Identity management",desc:"Manage identities of all personnel with access to PII systems.",gap:"Joiners/movers/leavers process does not include PII system access review."},
+      {id:"A.3.9",name:"Access rights",desc:"Restrict access to PII on a need-to-know/least-privilege basis.",gap:"Overly broad access to PII systems; no periodic access review."},
+      {id:"A.3.10",name:"Supplier agreements",desc:"Supplier/vendor contracts must include appropriate privacy and data protection clauses.",gap:"Vendor contracts do not include DPA or privacy obligations."},
+      {id:"A.3.11",name:"Incident management",desc:"Privacy breaches must be identified, reported, and managed within required timeframes.",gap:"Incident process does not distinguish personal data breaches; no 72-hour notification procedure."},
+      {id:"A.3.12",name:"Security incident response",desc:"Incident response plans must cover personal data breaches; 72-hour GDPR notification built in.",gap:"IR plan has no privacy breach section; DPA notification not in scope."},
+      {id:"A.3.13",name:"Legal and regulatory requirements",desc:"Identify and comply with all applicable privacy laws and regulations.",gap:"No register of applicable privacy laws; GDPR obligations not formally tracked."},
+      {id:"A.3.14",name:"Protection of records",desc:"Records containing PII must be protected against unauthorized access, loss, or destruction.",gap:"Retention/disposal of PII records not formally managed."},
+      {id:"A.3.15",name:"Independent review",desc:"Periodic independent review of PIMS and privacy controls (internal or external audit).",gap:"No privacy audit programme; privacy controls not in internal audit scope."},
+      {id:"A.3.16",name:"Compliance with policies",desc:"Monitor and verify compliance with privacy policies and procedures.",gap:"No ongoing privacy compliance monitoring; reliance on periodic manual checks."},
+      {id:"A.3.17",name:"Security awareness and training",desc:"Privacy training included in security awareness; role-based training for high-risk roles.",gap:"Security awareness training does not cover privacy; no role-specific privacy training."},
+      {id:"A.3.18",name:"Confidentiality agreements",desc:"All personnel with access to PII must sign confidentiality/NDA agreements.",gap:"Confidentiality agreements do not specifically reference personal data obligations."},
+      {id:"A.3.19",name:"Clear desk and clear screen",desc:"PII-containing documents and screen displays must be protected when unattended.",gap:"No clear desk policy; PII visible on unattended screens in open-plan offices."},
+      {id:"A.3.20",name:"Storage media",desc:"Removable media containing PII must be controlled; disposal must be secure.",gap:"Uncontrolled use of USB drives; no secure disposal process for removable media."},
+      {id:"A.3.21",name:"Secure disposal of equipment",desc:"Equipment that held PII must be securely wiped before disposal or reuse.",gap:"No certificate of destruction; equipment disposed of without verified data wiping."},
+      {id:"A.3.22",name:"User endpoint devices",desc:"Endpoints with access to PII must have appropriate security controls (encryption, MDM, screen lock).",gap:"Endpoints without full-disk encryption; no MDM enforcement; BYOD unmanaged."},
+      {id:"A.3.23",name:"Secure authentication",desc:"Strong authentication controls for systems processing PII; MFA recommended.",gap:"No MFA on systems processing PII; shared credentials in use."},
+      {id:"A.3.24",name:"Information backup",desc:"Backups of PII-containing systems must be protected with equivalent controls to primary systems.",gap:"Backups not encrypted; backup access not restricted; restore not tested."},
+      {id:"A.3.25",name:"Logging",desc:"Access to and processing of PII must be logged; logs protected against tampering.",gap:"No audit logging of PII access; logs not retained for required period."},
+      {id:"A.3.26",name:"Use of cryptography",desc:"Encryption at rest and in transit for PII; key management procedures documented.",gap:"No encryption at rest; ad hoc key management; no documented crypto policy."},
+      {id:"A.3.27",name:"Secure development life cycle",desc:"Privacy by design embedded in SDLC; privacy requirements defined before development begins.",gap:"No privacy requirements in user stories; no privacy review gate in SDLC."},
+      {id:"A.3.28",name:"Application security",desc:"Applications processing PII must be tested for security vulnerabilities.",gap:"No DAST/SAST; penetration testing does not cover PII-handling applications."},
+      {id:"A.3.29",name:"Secure system architecture",desc:"System architecture must segregate PII and support least-privilege principle.",gap:"PII co-mingled with non-PII data; no network segmentation for PII systems."},
+      {id:"A.3.30",name:"Outsourced development",desc:"Privacy and security requirements must be flowed into outsourced development contracts.",gap:"Development contracts do not include privacy or data handling requirements."},
+      {id:"A.3.31",name:"Test information",desc:"Live PII must not be used in test environments without authorization and equivalent controls.",gap:"Live PII used in non-production environments without authorisation or equivalent controls."},
+    ]},
+  ]
+};
+
+const STORAGE_KEY='iso27701_2025_v1';
+let state={},role='both',activeTab='a1',activeFilter='all';
+
+function loadState(){try{const s=localStorage.getItem(STORAGE_KEY);if(s){const p=JSON.parse(s);state=p.state||{};role=p.role||'both';}}catch(e){}}
+function saveState(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({state,role}));const i=document.getElementById('saveIndicator');if(i){i.style.opacity='1';setTimeout(()=>i.style.opacity='0.6',800);}}catch(e){}}
+
+function setRole(r){
+  role=r;
+  ['controller','processor','both'].forEach(x=>{
+    document.getElementById('role-'+x).classList.toggle('active',x===r);
+    document.getElementById('role-'+x).setAttribute('aria-checked',x===r?'true':'false');
+  });
+  const showA1=r==='controller'||r==='both';
+  const showA2=r==='processor'||r==='both';
+  document.getElementById('tab-a1').style.display=showA1?'':'none';
+  document.getElementById('tab-a2').style.display=showA2?'':'none';
+  if(activeTab==='a1'&&!showA1)setTab('a3',false);
+  else if(activeTab==='a2'&&!showA2)setTab('a3',false);
+  renderAll();updateSummary();updateBadges();saveState();
+}
+
+function setTab(t,save=true){
+  activeTab=t;
+  ['a1','a2','a3'].forEach(x=>{
+    document.getElementById('tab-'+x).classList.toggle('active',x===t);
+    document.getElementById('tab-'+x).setAttribute('aria-selected',x===t?'true':'false');
+    document.getElementById('panel-'+x).hidden=x!==t;
+  });
+  renderPanel(t);
+}
+
+function setFilter(f){
+  activeFilter=f;
+  ['all','none','part','unrated'].forEach(x=>document.getElementById('filter-'+x).classList.toggle('active',x===f));
+  renderAll();
+}
+
+function setStatus(id,s){state[id]=state[id]===s?null:s;renderPanel(activeTab);updateBadges();updateSummary();saveState();}
+
+function renderAll(){['a1','a2','a3'].forEach(renderPanel);}
+
+function renderPanel(tab){
+  const panel=document.getElementById('panel-'+tab);
+  panel.innerHTML='';
+  CONTROLS[tab].forEach(domain=>{
+    const fc=domain.controls.filter(c=>{
+      if(activeFilter==='none')return state[c.id]==='none';
+      if(activeFilter==='part')return state[c.id]==='part';
+      if(activeFilter==='unrated')return !state[c.id];
+      return true;
+    });
+    if(!fc.length)return;
+    const dh=document.createElement('div');
+    dh.className='domain-header';dh.textContent=domain.domain;
+    panel.appendChild(dh);
+    fc.forEach(c=>{
+      const st=state[c.id];
+      const row=document.createElement('div');
+      row.className='control-row';
+      row.innerHTML=`
+        <div class="ctrl-id">${c.id}</div>
+        <div>
+          <div class="ctrl-name">${c.name}</div>
+          <div class="ctrl-desc">${c.desc}</div>
+          ${st==='none'?`<div class="ctrl-gap">⚠ Common gap: ${c.gap}</div>`:''}
+        </div>
+        <div class="ctrl-status">
+          <button class="status-btn${st==='impl'?' active-impl':''}" onclick="setStatus('${c.id}','impl')" title="Implemented" aria-pressed="${st==='impl'}">✅</button>
+          <button class="status-btn${st==='part'?' active-part':''}" onclick="setStatus('${c.id}','part')" title="Partial" aria-pressed="${st==='part'}">🟡</button>
+          <button class="status-btn${st==='none'?' active-none':''}" onclick="setStatus('${c.id}','none')" title="Not implemented" aria-pressed="${st==='none'}">❌</button>
+          <button class="status-btn${st==='na'?' active-na':''}" onclick="setStatus('${c.id}','na')" title="Not applicable" aria-pressed="${st==='na'}"><span class="na-text">N/A</span></button>
+        </div>`;
+      panel.appendChild(row);
+    });
+  });
+  if(!panel.children.length){panel.innerHTML='<div class="empty-state">No controls match this filter.</div>';}
+}
+
+function getApplicableIds(){
+  let ids=[];
+  if(role==='controller'||role==='both')CONTROLS.a1.forEach(d=>d.controls.forEach(c=>ids.push(c.id)));
+  if(role==='processor'||role==='both')CONTROLS.a2.forEach(d=>d.controls.forEach(c=>ids.push(c.id)));
+  CONTROLS.a3.forEach(d=>d.controls.forEach(c=>ids.push(c.id)));
+  return ids;
+}
+
+function updateSummary(){
+  const ids=getApplicableIds();
+  let impl=0,part=0,none=0,na=0;
+  ids.forEach(id=>{const s=state[id];if(s==='impl')impl++;else if(s==='part')part++;else if(s==='none')none++;else if(s==='na')na++;});
+  const applicable=ids.length-na;
+  const score=applicable>0?Math.round(((impl+part*0.5)/applicable)*100):0;
+  const c=score>=75?'var(--green)':score>=40?'var(--amber)':'var(--red)';
+  const bc=score>=75?'var(--green-border)':score>=40?'var(--amber-border)':'var(--red-border)';
+  document.getElementById('metScore').textContent=score+'%';
+  document.getElementById('metScore').style.color=c;
+  document.getElementById('scoreBar').style.width=score+'%';
+  document.getElementById('scoreBar').style.background=bc;
+  document.getElementById('metImpl').textContent=impl;
+  document.getElementById('metPart').textContent=part;
+  document.getElementById('metNone').textContent=none;
+}
+
+function updateBadges(){
+  const ids=getApplicableIds();
+  ['a1','a2','a3'].forEach(tab=>{
+    let total=0,gaps=0;
+    CONTROLS[tab].forEach(d=>d.controls.forEach(c=>{if(ids.includes(c.id)){total++;if(state[c.id]==='none')gaps++;}}));
+    document.getElementById('badge-'+tab).textContent=gaps>0?total+' · '+gaps+' gaps':total;
+  });
+}
+
+function exportCSV(){
+  const ids=getApplicableIds();
+  const lines=['ISO 27701:2025 Gap Assessment Report','Generated: '+new Date().toLocaleDateString('en-GB'),'Role: '+role,'','Control ID,Control Name,Domain,Status,Common Gap'];
+  ['a1','a2','a3'].forEach(tab=>{
+    CONTROLS[tab].forEach(d=>d.controls.forEach(c=>{
+      if(!ids.includes(c.id))return;
+      const s=state[c.id];
+      const label=s==='impl'?'Implemented':s==='part'?'Partial':s==='none'?'Not implemented':s==='na'?'N/A':'Not rated';
+      const gap=s==='none'?'"'+c.gap.replace(/"/g,'""')+'"':'""';
+      lines.push(`"${c.id}","${c.name}","${d.domain}","${label}",${gap}`);
+    }));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='iso27701-2025-gap-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+function resetAll(){
+  if(!confirm('Reset all ratings? This cannot be undone.'))return;
+  state={};saveState();renderAll();updateSummary();updateBadges();
+}
+
+loadState();
+setRole(role);
+updateSummary();
+updateBadges();
+</script>
+</body>
+</html>
