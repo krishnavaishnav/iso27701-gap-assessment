@@ -9,6 +9,7 @@
   <meta property="og:description" content="Free open-source PIMS gap assessment. Rate 78 controls, export CSV, track compliance score." />
   <meta property="og:type" content="website" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -104,9 +105,69 @@
       .main { padding: 1rem; } .role-grid { grid-template-columns: 1fr; } .metrics-grid { grid-template-columns: repeat(2,1fr); }
       .control-row { grid-template-columns: 60px 1fr; } .ctrl-status { grid-column: 1/-1; } .site-header { padding: 0 1rem; } .header-links { display: none; }
     }
+    /* Control detail panel */
+    .ctrl-detail-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--blue); padding: 4px 0 0; display: inline-flex; align-items: center; gap: 3px; font-family: inherit; }
+    .ctrl-detail-btn:hover { text-decoration: underline; }
+    .ctrl-detail { margin-top: 8px; padding: 10px 12px; background: var(--bg-secondary); border-radius: var(--radius-md); border: 0.5px solid var(--border); }
+    .ctrl-detail-section { margin-bottom: 8px; }
+    .ctrl-detail-section:last-child { margin-bottom: 0; }
+    .ctrl-detail-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 4px; }
+    .ctrl-detail-text { font-size: 12px; color: var(--text-secondary); line-height: 1.55; }
+    .ctrl-detail-docs { font-size: 12px; color: var(--text-secondary); line-height: 1.55; padding-left: 16px; margin: 0; }
+    .ctrl-detail-docs li { margin-bottom: 2px; }
+    /* Gate overlay */
+    #gate-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    #gate-overlay.hidden { display: none; }
+    .gate-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 2.5rem; max-width: 440px; width: 100%; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+    .gate-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 1.75rem; }
+    .gate-logo-icon { width: 36px; height: 36px; background: var(--blue); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .gate-logo-name { font-size: 14px; font-weight: 600; }
+    .gate-logo-badge { font-size: 11px; background: var(--blue-light); color: var(--blue-dark); padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+    .gate-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+    .gate-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6; }
+    .gate-field { margin-bottom: 1rem; }
+    .gate-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 5px; }
+    .gate-required { color: var(--red); }
+    .gate-input { width: 100%; padding: 9px 12px; font-size: 14px; border: 0.5px solid var(--border-md); border-radius: var(--radius-md); background: var(--bg-secondary); color: var(--text); outline: none; transition: border-color 0.15s, box-shadow 0.15s; font-family: inherit; }
+    .gate-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light); }
+    .gate-input::placeholder { color: var(--text-tertiary); }
+    .gate-btn { width: 100%; padding: 10px; font-size: 14px; font-weight: 600; background: var(--blue); color: #fff; border: none; border-radius: var(--radius-md); cursor: pointer; margin-top: 0.5rem; transition: background 0.15s; font-family: inherit; }
+    .gate-btn:hover:not(:disabled) { background: var(--blue-dark); }
+    .gate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .gate-error { display: none; margin-top: 0.75rem; padding: 8px 12px; background: var(--red-light); border: 0.5px solid var(--red-border); border-radius: var(--radius-sm); font-size: 12px; color: var(--red); }
+    .gate-privacy { margin-top: 1rem; font-size: 11px; color: var(--text-tertiary); text-align: center; line-height: 1.5; }
   </style>
 </head>
 <body>
+<div id="gate-overlay">
+  <div class="gate-card">
+    <div class="gate-logo">
+      <div class="gate-logo-icon">🔐</div>
+      <span class="gate-logo-name">ISO 27701:2025</span>
+      <span class="gate-logo-badge">Gap Assessment</span>
+    </div>
+    <div class="gate-title">Access the free tool</div>
+    <div class="gate-sub">Enter your details to access all 78 Annex A controls, compliance scoring, and CSV export — free, runs entirely in your browser.</div>
+    <form id="gate-form" novalidate>
+      <div class="gate-field">
+        <label class="gate-label" for="gate-name">Full name <span class="gate-required">*</span></label>
+        <input class="gate-input" type="text" id="gate-name" name="name" placeholder="Jane Smith" required autocomplete="name" />
+      </div>
+      <div class="gate-field">
+        <label class="gate-label" for="gate-org">Organisation</label>
+        <input class="gate-input" type="text" id="gate-org" name="organisation" placeholder="Acme Ltd" autocomplete="organization" />
+      </div>
+      <div class="gate-field">
+        <label class="gate-label" for="gate-email">Work email <span class="gate-required">*</span></label>
+        <input class="gate-input" type="email" id="gate-email" name="email" placeholder="jane@company.com" required autocomplete="email" />
+      </div>
+      <button class="gate-btn" type="submit" id="gate-btn">Access the tool →</button>
+      <div class="gate-error" id="gate-error"></div>
+    </form>
+    <div class="gate-privacy">Your information is stored securely and will not be shared with third parties.</div>
+  </div>
+</div>
+
 <header class="site-header">
   <div class="site-header-inner">
     <a class="site-logo" href="/">
@@ -203,104 +264,260 @@
 const CONTROLS = {
   a1:[
     {domain:"A.1.2 — Conditions for collection and processing",controls:[
-      {id:"A.1.2.2",name:"Identify and document purpose",desc:"Document specific purposes for PII collection before collection begins.",gap:"Vague or catch-all purpose statements; purposes undocumented in RoPA."},
-      {id:"A.1.2.3",name:"Identify lawful basis",desc:"Map a lawful basis to each processing activity (consent, contract, legitimate interest, etc.).",gap:"No per-activity lawful basis mapping; LIA not completed for legitimate interest claims."},
-      {id:"A.1.2.4",name:"Determine consent",desc:"Define when/how consent is obtained; ensure freely given, specific, informed, unambiguous.",gap:"Pre-ticked boxes; bundled consent; no record of when consent was obtained."},
-      {id:"A.1.2.5",name:"Obtain and record consent",desc:"Implement mechanisms to capture, record, and maintain proof of consent.",gap:"No consent audit trail; inability to retrieve consent records for specific individuals."},
-      {id:"A.1.2.6",name:"Privacy impact assessment",desc:"Conduct PIAs/DPIAs for new or significantly changed processing; document findings.",gap:"PIA process exists but not triggered consistently; no DPIA for high-risk processing."},
-      {id:"A.1.2.7",name:"Contracts with PII processors",desc:"Engage all PII processors under a written DPA specifying obligations.",gap:"Processor contracts missing; legacy contracts without GDPR-compliant DPA clauses."},
-      {id:"A.1.2.8",name:"Joint PII controller",desc:"Document joint controller arrangements and each party's obligations.",gap:"Joint controller arrangement undocumented; responsibilities undefined."},
-      {id:"A.1.2.9",name:"Records of processing PII",desc:"Maintain complete Records of Processing Activities (RoPA) for all operations.",gap:"RoPA incomplete, out of date, or not maintained; no process to update on system changes."},
+      {id:"A.1.2.2",name:"Identify and document purpose",desc:"Document specific purposes for PII collection before collection begins.",gap:"Vague or catch-all purpose statements; purposes undocumented in RoPA.",
+       explanation:"Before collecting any PII, the organisation must identify and document specific, explicit, and legitimate purposes for processing. Purposes must be granular enough to inform individuals and support all subsequent processing decisions. Catch-all statements such as 'service improvement' or 'business purposes' are insufficient.",
+       docs:["Records of Processing Activities (RoPA) — purpose column","Privacy notice specifying each processing purpose","Internal data inventory or data map","Purpose register"]},
+      {id:"A.1.2.3",name:"Identify lawful basis",desc:"Map a lawful basis to each processing activity (consent, contract, legitimate interest, etc.).",gap:"No per-activity lawful basis mapping; LIA not completed for legitimate interest claims.",
+       explanation:"Every processing activity must be mapped to a specific lawful basis before processing begins. Where legitimate interests is relied upon, a Legitimate Interests Assessment (LIA) must be completed and documented. The chosen lawful basis must be recorded in the RoPA and communicated to individuals in the privacy notice.",
+       docs:["RoPA with lawful basis column per processing activity","Legitimate Interests Assessments (LIAs)","Consent records","Legal review documentation per processing activity"]},
+      {id:"A.1.2.4",name:"Determine consent",desc:"Define when/how consent is obtained; ensure freely given, specific, informed, unambiguous.",gap:"Pre-ticked boxes; bundled consent; no record of when consent was obtained.",
+       explanation:"Where consent is used as the lawful basis, the organisation must define and document when and how consent is collected. Consent must be freely given, specific to a stated purpose, informed, and unambiguous. Consent bundled with terms of service or obtained via pre-ticked boxes does not meet the requirement.",
+       docs:["Consent mechanism design documentation","Consent form and opt-in templates","Consent management platform configuration","Consent collection workflow documentation"]},
+      {id:"A.1.2.5",name:"Obtain and record consent",desc:"Implement mechanisms to capture, record, and maintain proof of consent.",gap:"No consent audit trail; inability to retrieve consent records for specific individuals.",
+       explanation:"The organisation must implement technical and procedural mechanisms to capture, timestamp, and store proof of consent for each individual and each purpose. Consent records must be retrievable on demand to demonstrate compliance to individuals or regulators.",
+       docs:["Consent audit trail or consent log","Consent management platform export","Individual consent records with timestamps","Consent withdrawal records"]},
+      {id:"A.1.2.6",name:"Privacy impact assessment",desc:"Conduct PIAs/DPIAs for new or significantly changed processing; document findings.",gap:"PIA process exists but not triggered consistently; no DPIA for high-risk processing.",
+       explanation:"A formal PIA or DPIA must be conducted before introducing new processing activities or significantly changing existing ones. DPIAs are mandatory for high-risk processing under GDPR Article 35. Findings and remediation actions must be documented and tracked to closure before processing begins.",
+       docs:["PIA/DPIA template","Completed PIA/DPIA reports","DPIA register","PIA screening questionnaire","Remediation action tracker"]},
+      {id:"A.1.2.7",name:"Contracts with PII processors",desc:"Engage all PII processors under a written DPA specifying obligations.",gap:"Processor contracts missing; legacy contracts without GDPR-compliant DPA clauses.",
+       explanation:"Every third party that processes PII on behalf of the organisation must be engaged under a written Data Processing Agreement (DPA) containing all mandatory clauses, including processing scope, security obligations, sub-processor rules, and data subject rights assistance. Legacy contracts without compliant DPA clauses must be remediated.",
+       docs:["Data Processing Agreements (DPAs) with all processors","Vendor and processor register","Processor due diligence assessment records","Sub-processor approval records"]},
+      {id:"A.1.2.8",name:"Joint PII controller",desc:"Document joint controller arrangements and each party's obligations.",gap:"Joint controller arrangement undocumented; responsibilities undefined.",
+       explanation:"Where two or more organisations jointly determine the purposes and means of processing, a joint controller agreement must be documented specifying each party's responsibilities for fulfilling privacy obligations. The essence of the arrangement must be made available to PII principals.",
+       docs:["Joint controller agreement","Responsibility matrix between joint controllers","Privacy notice referencing the joint controller arrangement","Communication records with co-controllers"]},
+      {id:"A.1.2.9",name:"Records of processing PII",desc:"Maintain complete Records of Processing Activities (RoPA) for all operations.",gap:"RoPA incomplete, out of date, or not maintained; no process to update on system changes.",
+       explanation:"Comprehensive, up-to-date Records of Processing Activities (RoPA) must be maintained for all processing under the organisation's responsibility. The RoPA must document controller identity, processing purposes, PII categories, recipient categories, retention periods, transfer safeguards, and security measures. A defined update process must ensure currency when systems or processes change.",
+       docs:["Records of Processing Activities (RoPA)","RoPA update procedure","Data inventory or data map","System and application inventory linked to RoPA"]},
     ]},
     {domain:"A.1.3 — Obligations to PII principals",controls:[
-      {id:"A.1.3.2",name:"Obligations to PII principals",desc:"Establish and document obligations to PII principals and mechanisms to meet them.",gap:"No documented obligations register; rights not mapped to processes."},
-      {id:"A.1.3.3",name:"Information for PII principals",desc:"Determine what information must be provided before or at point of collection.",gap:"Privacy notice does not cover all required information elements."},
-      {id:"A.1.3.4",name:"Providing information",desc:"Provide required information clearly and accessibly (typically via privacy notice).",gap:"Privacy notice not easy to find; information presented in complex legal language."},
-      {id:"A.1.3.5",name:"Modify or withdraw consent",desc:"Provide a mechanism to modify or withdraw consent without detriment.",gap:"No withdrawal mechanism; withdrawal treated as deletion rather than consent change."},
-      {id:"A.1.3.6",name:"Object to PII processing",desc:"Provide mechanism for PII principals to object to processing.",gap:"No documented objection process; no SLA for response."},
-      {id:"A.1.3.7",name:"Access, correction or erasure",desc:"Provide mechanism for access, correction, and erasure requests (right to be forgotten).",gap:"No DSR workflow; erasure requests not propagated to all systems."},
-      {id:"A.1.3.8",name:"Inform third parties",desc:"Notify third parties when PII is corrected or erased.",gap:"No process to track and notify third parties after correction/erasure."},
-      {id:"A.1.3.9",name:"Providing copy of PII",desc:"Provide PII principals with a copy of their PII upon request (data portability).",gap:"No automated or streamlined way to fulfil subject access requests."},
-      {id:"A.1.3.10",name:"Handling requests",desc:"Process, track, authenticate and respond to all DSR types within required timescales.",gap:"Requests handled ad hoc; no SLA tracking; identity verification process missing."},
-      {id:"A.1.3.11",name:"Automated decision making",desc:"Disclose automated decision-making with significant effects; provide human review option.",gap:"Automated decisions undisclosed; no opt-out or appeal mechanism."},
+      {id:"A.1.3.2",name:"Obligations to PII principals",desc:"Establish and document obligations to PII principals and mechanisms to meet them.",gap:"No documented obligations register; rights not mapped to processes.",
+       explanation:"The organisation must identify and document all obligations owed to PII principals — including rights to access, rectification, erasure, restriction, portability, and objection — and maintain operational processes to fulfil each right within required timescales. A register mapping each right to an operational process must be maintained.",
+       docs:["Data subject rights register","DSR handling procedures (per right type)","Obligations mapping document","Privacy governance framework"]},
+      {id:"A.1.3.3",name:"Information for PII principals",desc:"Determine what information must be provided before or at point of collection.",gap:"Privacy notice does not cover all required information elements.",
+       explanation:"The organisation must determine which information elements are required to be provided to PII principals at or before the point of collection. Required elements include: controller identity, DPO contact details, processing purposes, lawful basis, retention periods, data subject rights, international transfer details, and the right to complain to a supervisory authority.",
+       docs:["Privacy notice content checklist","Privacy notice (all current versions)","Cookie policy or cookie notice","Layered privacy notice structure documentation"]},
+      {id:"A.1.3.4",name:"Providing information",desc:"Provide required information clearly and accessibly (typically via privacy notice).",gap:"Privacy notice not easy to find; information presented in complex legal language.",
+       explanation:"Required privacy information must be communicated in a concise, transparent, intelligible, and easily accessible form using clear and plain language. The privacy notice must be prominently linked at all collection points and provided free of charge. Dense legal language without plain-language explanation does not satisfy this control.",
+       docs:["Published privacy notice (URL and version history)","Plain language readability assessment","Privacy notice accessibility review","Privacy notice review and update log"]},
+      {id:"A.1.3.5",name:"Modify or withdraw consent",desc:"Provide a mechanism to modify or withdraw consent without detriment.",gap:"No withdrawal mechanism; withdrawal treated as deletion rather than consent change.",
+       explanation:"Where consent is the lawful basis, individuals must be able to modify or withdraw consent at any time without detriment, using a mechanism as easy as the one used to give consent. Withdrawal must be acted upon promptly and must not result in denial of a service to which the individual is entitled.",
+       docs:["Consent withdrawal mechanism documentation","Unsubscribe or opt-out workflow","Marketing preference centre documentation","Consent update and withdrawal records"]},
+      {id:"A.1.3.6",name:"Object to PII processing",desc:"Provide mechanism for PII principals to object to processing.",gap:"No documented objection process; no SLA for response.",
+       explanation:"Individuals must be able to object to processing at any time, particularly for direct marketing (an absolute right) and for legitimate interests (a qualified right). A documented process must exist for receiving, assessing, and responding to objections within required timescales, with escalation paths for complex cases.",
+       docs:["Objection handling procedure","DSR workflow (objection type)","Objection and complaint register","SLA documentation for DSR responses"]},
+      {id:"A.1.3.7",name:"Access, correction or erasure",desc:"Provide mechanism for access, correction, and erasure requests (right to be forgotten).",gap:"No DSR workflow; erasure requests not propagated to all systems.",
+       explanation:"Documented procedures must exist to handle subject access requests (SARs), rectification requests, and erasure requests. Erasure must be propagated to all systems — including processors and third-party recipients — where applicable. Requests must be fulfilled within legally required timescales (typically one calendar month).",
+       docs:["DSR handling procedure (SAR, rectification, erasure)","DSR request and fulfilment log","Identity verification procedure","Erasure propagation and confirmation records"]},
+      {id:"A.1.3.8",name:"Inform third parties",desc:"Notify third parties when PII is corrected or erased.",gap:"No process to track and notify third parties after correction/erasure.",
+       explanation:"When PII has been corrected, erased, or restricted, the organisation must notify all third parties (processors, other controllers) to whom it was disclosed, unless this is impossible or involves disproportionate effort. A disclosure log enables identification of all parties to be notified.",
+       docs:["Third-party notification procedure","Disclosure log (all recipients of PII)","Erasure and correction propagation records","Third-party notification communication templates"]},
+      {id:"A.1.3.9",name:"Providing copy of PII",desc:"Provide PII principals with a copy of their PII upon request (data portability).",gap:"No automated or streamlined way to fulfil subject access requests.",
+       explanation:"On request, individuals must receive a copy of their personal data in a structured, commonly used, machine-readable format, free of charge for routine requests. The copy must be provided within statutory timescales. Where possible, a technical self-service mechanism for automated data export should be available.",
+       docs:["Subject Access Request (SAR) procedure","Data export mechanism documentation","SAR response templates","SAR fulfilment and timing records"]},
+      {id:"A.1.3.10",name:"Handling requests",desc:"Process, track, authenticate and respond to all DSR types within required timescales.",gap:"Requests handled ad hoc; no SLA tracking; identity verification process missing.",
+       explanation:"A documented end-to-end process must exist for all types of data subject requests, covering intake, identity verification, assessment, fulfilment, and response within statutory timescales (one month, extendable by two months for complex requests). All requests and outcomes must be logged.",
+       docs:["DSR management procedure","DSR intake form or portal","DSR register and response tracker","Identity verification procedure","SLA monitoring records"]},
+      {id:"A.1.3.11",name:"Automated decision making",desc:"Disclose automated decision-making with significant effects; provide human review option.",gap:"Automated decisions undisclosed; no opt-out or appeal mechanism.",
+       explanation:"Where the organisation uses solely automated processing — including profiling — that produces legal or similarly significant effects on individuals, this must be disclosed in the privacy notice. Individuals must have the right to obtain human review of the decision, to express their point of view, and to contest the outcome.",
+       docs:["Automated decision-making disclosure in privacy notice","Human review procedure","Algorithmic transparency or explainability documentation","DPIA covering automated processing activities"]},
     ]},
     {domain:"A.1.4 — Privacy by design and by default",controls:[
-      {id:"A.1.4.2",name:"Limit collection",desc:"Collect only PII necessary for the stated purpose (data minimisation).",gap:"Collecting more fields than required; no data minimisation review in product design."},
-      {id:"A.1.4.3",name:"Limit processing",desc:"Process PII only for the stated purpose; prevent secondary use without additional basis.",gap:"Processing PII for analytics or profiling beyond original purpose."},
-      {id:"A.1.4.4",name:"Accuracy and quality",desc:"Maintain accuracy of PII; provide mechanisms for correction.",gap:"No data quality validation; no user self-service correction mechanism."},
-      {id:"A.1.4.5",name:"PII minimisation",desc:"Apply systematic controls to minimise the amount of PII held and processed.",gap:"No PII minimisation checklist in SDLC; fields not reviewed for necessity."},
-      {id:"A.1.4.6",name:"De-identification and deletion",desc:"Implement de-identification and deletion procedures when PII is no longer needed.",gap:"No automated deletion; PII retained indefinitely in test environments."},
-      {id:"A.1.4.7",name:"Temporary files",desc:"Ensure temporary files containing PII are securely managed and deleted when no longer needed.",gap:"Temp files, logs, and cache containing PII not covered by retention/deletion policy."},
-      {id:"A.1.4.8",name:"Retention",desc:"Define and implement data retention schedules aligned to legal obligations.",gap:"No retention schedule; all data kept indefinitely; retention schedule not enforced."},
-      {id:"A.1.4.9",name:"Disposal",desc:"Securely dispose of PII at end of retention period; document disposal.",gap:"No secure deletion process; PII disposed with general data."},
-      {id:"A.1.4.10",name:"PII transmission controls",desc:"Apply controls to protect PII in transit (encryption, secure channels, access controls).",gap:"PII transmitted over unencrypted channels; no controls on email transmission of PII."},
+      {id:"A.1.4.2",name:"Limit collection",desc:"Collect only PII necessary for the stated purpose (data minimisation).",gap:"Collecting more fields than required; no data minimisation review in product design.",
+       explanation:"The organisation must collect only the minimum PII strictly necessary for each stated purpose. Forms, APIs, and system designs must be reviewed to remove fields that are not strictly necessary. Data minimisation must be a formal requirement in the product design and SDLC process.",
+       docs:["Data minimisation policy","Product and system design review records","Data inventory with necessity justification per field","SDLC privacy review checklist"]},
+      {id:"A.1.4.3",name:"Limit processing",desc:"Process PII only for the stated purpose; prevent secondary use without additional basis.",gap:"Processing PII for analytics or profiling beyond original purpose.",
+       explanation:"PII may only be processed for the purpose for which it was collected. Any secondary use — for analytics, profiling, or research — requires a separate lawful basis and a documented compatibility assessment. Technical controls must enforce purpose limitation at the system level where practicable.",
+       docs:["Purpose limitation policy","Compatibility assessment procedure","Access controls documentation","Data use register or secondary use approval records"]},
+      {id:"A.1.4.4",name:"Accuracy and quality",desc:"Maintain accuracy of PII; provide mechanisms for correction.",gap:"No data quality validation; no user self-service correction mechanism.",
+       explanation:"The organisation must take reasonable steps to ensure PII held is accurate, complete, and kept up to date where necessary for the processing purpose. Mechanisms must exist for individuals to correct their data, and internal processes must identify and remediate inaccurate PII.",
+       docs:["Data quality policy","Data validation and cleansing procedures","Self-service correction mechanism documentation","Data quality audit records"]},
+      {id:"A.1.4.5",name:"PII minimisation",desc:"Apply systematic controls to minimise the amount of PII held and processed.",gap:"No PII minimisation checklist in SDLC; fields not reviewed for necessity.",
+       explanation:"Systematic controls must be in place across the data lifecycle to minimise the volume and sensitivity of PII processed. This includes pseudonymisation where appropriate, removal of unnecessary PII fields at the design stage, and formal minimisation reviews for new systems and significant changes.",
+       docs:["PII minimisation policy","Data minimisation review records (SDLC gate)","Pseudonymisation procedures and implementation records","Data inventory with necessity justification"]},
+      {id:"A.1.4.6",name:"De-identification and deletion",desc:"Implement de-identification and deletion procedures when PII is no longer needed.",gap:"No automated deletion; PII retained indefinitely in test environments.",
+       explanation:"When PII is no longer needed for its original purpose, it must be de-identified (anonymised or pseudonymised) or securely deleted in accordance with a defined retention schedule. Procedures must address PII in all environments, including development, test, and staging environments.",
+       docs:["De-identification and anonymisation procedures","Retention and deletion schedule","Deletion confirmation and audit records","Test environment PII removal procedures"]},
+      {id:"A.1.4.7",name:"Temporary files",desc:"Ensure temporary files containing PII are securely managed and deleted when no longer needed.",gap:"Temp files, logs, and cache containing PII not covered by retention/deletion policy.",
+       explanation:"Temporary files, cache files, intermediate processing output, and logs containing PII must be managed under the same controls as primary data. They must be deleted when no longer operationally necessary and must not persist beyond defined schedules. Automated deletion mechanisms should be implemented where possible.",
+       docs:["Temporary file management procedure","Log management and retention policy","Technical auto-deletion controls documentation","Retention schedule covering temporary and log files"]},
+      {id:"A.1.4.8",name:"Retention",desc:"Define and implement data retention schedules aligned to legal obligations.",gap:"No retention schedule; all data kept indefinitely; retention schedule not enforced.",
+       explanation:"Retention schedules must be defined for all categories of PII, specifying the maximum retention period and the event that triggers deletion or review (e.g., end of contract, expiry of statutory limitation period). Schedules must be enforced through technical controls or defined manual procedures with documented evidence.",
+       docs:["Data retention policy","Retention schedule (per data category)","Legal hold procedure","Retention enforcement mechanism documentation","Retention compliance audit records"]},
+      {id:"A.1.4.9",name:"Disposal",desc:"Securely dispose of PII at end of retention period; document disposal.",gap:"No secure deletion process; PII disposed with general data.",
+       explanation:"At the end of the retention period, PII must be securely and irreversibly disposed of using methods appropriate to the medium — overwriting or cryptographic erasure for digital data, cross-cut shredding for paper. Disposal must be documented, and a certificate of destruction must be obtained from third-party disposal providers.",
+       docs:["Data disposal procedure","Certificate of destruction or disposal records","Secure disposal contracts (for third-party disposal providers)","Media and equipment disposal log"]},
+      {id:"A.1.4.10",name:"PII transmission controls",desc:"Apply controls to protect PII in transit (encryption, secure channels, access controls).",gap:"PII transmitted over unencrypted channels; no controls on email transmission of PII.",
+       explanation:"PII must be protected during transmission using appropriate technical controls, including TLS/HTTPS for web services, SFTP or equivalent for file transfers, and encryption for emails containing PII. A policy must define approved transmission channels and prohibit unapproved or unencrypted channels.",
+       docs:["Data transmission policy","Encryption standards documentation","Approved transmission channels list","Secure file transfer procedure","Email security controls documentation"]},
     ]},
     {domain:"A.1.5 — PII sharing, transfer and disclosure",controls:[
-      {id:"A.1.5.2",name:"Identifying basis for PII transfer",desc:"Document the legal basis for transfers of PII to third countries or international organizations.",gap:"International transfers not mapped to legal transfer mechanism (SCCs, adequacy, etc.)."},
-      {id:"A.1.5.3",name:"Countries and organisations for PII transfer",desc:"Document countries/organizations to which PII is transferred; verify adequacy decisions or safeguards.",gap:"Data residency commitments made but not enforced; transfer destinations undocumented."},
-      {id:"A.1.5.4",name:"Records of PII disclosures",desc:"Maintain records of all disclosures of PII to third parties.",gap:"No disclosure log maintained; disclosures not tracked consistently."},
-      {id:"A.1.5.5",name:"Notification of PII disclosure requests",desc:"Establish a process for handling third-party requests for PII disclosure.",gap:"No process to handle government/law enforcement access requests."},
+      {id:"A.1.5.2",name:"Identifying basis for PII transfer",desc:"Document the legal basis for transfers of PII to third countries or international organizations.",gap:"International transfers not mapped to legal transfer mechanism (SCCs, adequacy, etc.).",
+       explanation:"Transfers of PII to third countries must be supported by an appropriate legal transfer mechanism before the transfer occurs. Recognised mechanisms include adequacy decisions, Standard Contractual Clauses (SCCs), Binding Corporate Rules (BCRs), or other recognised derogations. Each transfer must be individually assessed and documented.",
+       docs:["International transfer register","Standard Contractual Clauses (SCCs)","Transfer Impact Assessments (TIAs)","Adequacy decision documentation","Binding Corporate Rules (BCRs) if applicable"]},
+      {id:"A.1.5.3",name:"Countries and organisations for PII transfer",desc:"Document countries/organizations to which PII is transferred; verify adequacy decisions or safeguards.",gap:"Data residency commitments made but not enforced; transfer destinations undocumented.",
+       explanation:"A register of all countries and international organisations to which PII is transferred must be maintained and kept current. For each destination, the applicable transfer mechanism must be verified and documented. Data residency commitments made in contracts with customers must be enforced and periodically audited.",
+       docs:["International transfer register (per destination country/organisation)","Processor and sub-processor location records","Data residency contractual clauses","Transfer mechanism documentation per destination"]},
+      {id:"A.1.5.4",name:"Records of PII disclosures",desc:"Maintain records of all disclosures of PII to third parties.",gap:"No disclosure log maintained; disclosures not tracked consistently.",
+       explanation:"A log of all disclosures of PII to third parties must be maintained, capturing the recipient, purpose, date, categories of PII disclosed, and legal basis for each disclosure. This log is essential for identifying all parties to notify in the event of subsequent correction, erasure, or breach.",
+       docs:["PII disclosure log","Third-party disclosure register","Legal basis for disclosure records","Regulatory and law enforcement response records"]},
+      {id:"A.1.5.5",name:"Notification of PII disclosure requests",desc:"Establish a process for handling third-party requests for PII disclosure.",gap:"No process to handle government/law enforcement access requests.",
+       explanation:"A documented process must exist for receiving, reviewing, and responding to third-party requests to disclose PII — including from law enforcement, government bodies, or litigants. The process must include legal review, logging of every request, and notification of the individual where legally permitted.",
+       docs:["Government and law enforcement disclosure procedure","Legal review procedure and escalation path","Disclosure request log","Template response letters for disclosure requests"]},
     ]},
   ],
   a2:[
     {domain:"A.2.2 — Conditions for collection and processing",controls:[
-      {id:"A.2.2.2",name:"Organisation's purposes",desc:"Process PII only for purposes specified in the controller's instructions.",gap:"Processor using PII for own analytics or product improvement without controller consent."},
-      {id:"A.2.2.3",name:"Use limitation",desc:"Ensure PII is not used for any purpose other than that instructed by the controller.",gap:"Staff accessing PII outside of defined processing scope."},
-      {id:"A.2.2.4",name:"Information to PII principals",desc:"Provide information to PII principals only as instructed or as legally required.",gap:"Processor responding to individuals without controller approval."},
-      {id:"A.2.2.5",name:"Controller obligations",desc:"Assist the controller in fulfilling obligations; notify if instructions appear to infringe applicable law.",gap:"No escalation process when controller instructions appear unlawful."},
-      {id:"A.2.2.6",name:"Customer obligations",desc:"Assist the controller in meeting obligations to PII principals (DSRs, DPIAs, breach notification).",gap:"No defined process to support controller's DSR fulfilment within contractual timeframes."},
-      {id:"A.2.2.7",name:"Records of processing PII",desc:"Maintain records of all processing activities carried out on behalf of each controller.",gap:"No per-controller processing records; single combined log not sufficient."},
+      {id:"A.2.2.2",name:"Organisation's purposes",desc:"Process PII only for purposes specified in the controller's instructions.",gap:"Processor using PII for own analytics or product improvement without controller consent.",
+       explanation:"As a PII processor, the organisation must process PII solely for the purposes and in the manner specified in the controller's documented instructions. Processing for the processor's own business purposes — such as analytics, model training, or product improvement — without explicit controller authorisation is prohibited.",
+       docs:["Data Processing Agreement (DPA) with each controller","Processing instruction records","Internal access control policies limiting use to instructed purposes","Employee acceptable use policy for PII"]},
+      {id:"A.2.2.3",name:"Use limitation",desc:"Ensure PII is not used for any purpose other than that instructed by the controller.",gap:"Staff accessing PII outside of defined processing scope.",
+       explanation:"Technical and organisational controls must be implemented to ensure PII is only used within the scope of controller instructions. Access controls, audit logging, and staff training must together prevent unauthorised use of PII. Any deviation from instructions must be escalated to the controller immediately.",
+       docs:["Access control policy","Audit log records for PII access","Staff training records on use limitation","Technical controls documentation","DPA use limitation clauses"]},
+      {id:"A.2.2.4",name:"Information to PII principals",desc:"Provide information to PII principals only as instructed or as legally required.",gap:"Processor responding to individuals without controller approval.",
+       explanation:"The processor must only provide information to PII principals when explicitly instructed by the controller or where required by applicable law. Staff must be trained to redirect individual inquiries to the controller rather than responding independently, unless the controller has defined a specific response procedure.",
+       docs:["Communication escalation procedure to controller","Controller instruction records","Staff guidance on handling direct individual inquiries","DPA communication obligation clauses"]},
+      {id:"A.2.2.5",name:"Controller obligations",desc:"Assist the controller in fulfilling obligations; notify if instructions appear to infringe applicable law.",gap:"No escalation process when controller instructions appear unlawful.",
+       explanation:"The processor must assist the controller in fulfilling its legal obligations, including providing information necessary for DPIAs and audits. Critically, if the processor identifies that controller instructions would infringe applicable privacy law, it must promptly notify the controller and must not act on unlawful instructions.",
+       docs:["Escalation and notification procedure","DPA obligation assistance clauses","Legal escalation records","Communication log with controllers"]},
+      {id:"A.2.2.6",name:"Customer obligations",desc:"Assist the controller in meeting obligations to PII principals (DSRs, DPIAs, breach notification).",gap:"No defined process to support controller's DSR fulfilment within contractual timeframes.",
+       explanation:"The processor must have documented procedures to assist the controller in meeting obligations to PII principals, including supporting DSR fulfilment, providing information for DPIAs, and notifying the controller of personal data breaches within contractually agreed timescales (typically 24–72 hours of becoming aware).",
+       docs:["DSR support procedure (for controller fulfilment)","Breach notification procedure to controller","DPIA information provision records","SLA documentation for breach notification timescales"]},
+      {id:"A.2.2.7",name:"Records of processing PII",desc:"Maintain records of all processing activities carried out on behalf of each controller.",gap:"No per-controller processing records; single combined log not sufficient.",
+       explanation:"The processor must maintain its own records of all processing activities carried out on behalf of each controller, documenting the controller's identity, categories of processing performed, sub-processors used, applicable transfer mechanisms, and security measures applied. Records must be available to supervisory authorities upon request.",
+       docs:["Processor RoPA (maintained per controller)","Sub-processor register","Processing activity records","Internal data inventory"]},
     ]},
     {domain:"A.2.3 — Obligations to PII principals",controls:[
-      {id:"A.2.3.2",name:"Obligations to PII principals",desc:"Where the processor interacts with PII principals, fulfil controller-defined obligations; redirect inquiries appropriately.",gap:"Processor staff unaware of how to handle DSR inquiries received directly."},
+      {id:"A.2.3.2",name:"Obligations to PII principals",desc:"Where the processor interacts with PII principals, fulfil controller-defined obligations; redirect inquiries appropriately.",gap:"Processor staff unaware of how to handle DSR inquiries received directly.",
+       explanation:"Where the processor interacts directly with PII principals, obligations must be fulfilled as defined by the controller. All other individual inquiries must be promptly redirected to the controller. Staff must be trained to recognise data subject requests and follow the defined escalation path without delay.",
+       docs:["Staff training records on DSR handling and escalation","Escalation procedure to controller","DPA clauses on principal interaction","Communication and redirection templates"]},
     ]},
     {domain:"A.2.4 — Privacy by design and by default",controls:[
-      {id:"A.2.4.2",name:"Temporary files",desc:"Ensure temporary files created during processing are managed and deleted per agreed schedules.",gap:"Temporary processing files retained beyond task completion."},
-      {id:"A.2.4.3",name:"Return, transfer or disposal of PII",desc:"Upon termination of processing agreement, return or securely dispose of all PII as instructed.",gap:"No offboarding procedure; PII retained after contract end."},
-      {id:"A.2.4.4",name:"PII transmission controls",desc:"Apply controls to protect PII in transit during processing operations.",gap:"PII transmitted without encryption between processor subsystems."},
+      {id:"A.2.4.2",name:"Temporary files",desc:"Ensure temporary files created during processing are managed and deleted per agreed schedules.",gap:"Temporary processing files retained beyond task completion.",
+       explanation:"Temporary files generated during processing on behalf of a controller — including intermediate outputs, logs, and cache — must be managed and deleted according to schedules defined in the DPA or applicable retention policy. Files must not persist beyond the completion of the processing task without explicit authorisation.",
+       docs:["Temporary file management procedure","Retention schedule covering temporary files","Technical auto-deletion controls documentation","DPA retention clauses"]},
+      {id:"A.2.4.3",name:"Return, transfer or disposal of PII",desc:"Upon termination of processing agreement, return or securely dispose of all PII as instructed.",gap:"No offboarding procedure; PII retained after contract end.",
+       explanation:"Upon termination of the processing agreement, the processor must return all PII to the controller and/or securely delete it as instructed, providing written confirmation of deletion. All copies including backups and temporary files must be addressed. Retention beyond contract termination without controller authorisation is prohibited.",
+       docs:["Contract termination and offboarding procedure","Deletion confirmation or certificate of destruction","DPA termination, return, and deletion clauses","Data return and deletion records"]},
+      {id:"A.2.4.4",name:"PII transmission controls",desc:"Apply controls to protect PII in transit during processing operations.",gap:"PII transmitted without encryption between processor subsystems.",
+       explanation:"PII must be protected during transmission within the processor's own systems and between the processor, controller, and sub-processors using appropriate encryption and secure protocols — TLS for web services, SFTP or equivalent for file transfers, and encrypted channels for inter-system communication.",
+       docs:["Encryption standards documentation","Secure transmission protocol specification","Network security controls documentation","DPA security requirements clauses"]},
     ]},
     {domain:"A.2.5 — PII sharing, transfer and disclosure",controls:[
-      {id:"A.2.5.2",name:"Basis for PII transfer",desc:"Identify and document the legal basis for any transfer of PII to a third country.",gap:"Sub-processor transfers not mapped to legal transfer mechanism."},
-      {id:"A.2.5.3",name:"Countries for PII transfer",desc:"Document countries/international organizations to which PII is transferred.",gap:"Data residency commitments made but not enforced; sub-processor locations undocumented."},
-      {id:"A.2.5.4",name:"Records of PII disclosures",desc:"Maintain records of all disclosures of PII to third parties.",gap:"Disclosure log not maintained at processor level."},
-      {id:"A.2.5.5",name:"Notification of PII disclosure requests",desc:"Notify the controller before disclosing PII to a third party where legally permitted.",gap:"No process to notify controllers of government/law enforcement access requests."},
-      {id:"A.2.5.6",name:"Legally binding PII disclosures",desc:"Where legally compelled to disclose PII, notify the controller where permitted and record the disclosure.",gap:"Disclosures made without notifying controller; no legal review process."},
-      {id:"A.2.5.7",name:"Disclosure of subcontractors",desc:"Disclose to the controller the identity and location of all sub-processors used.",gap:"Sub-processor list not maintained or shared with controllers."},
-      {id:"A.2.5.8",name:"Engagement of a subcontractor",desc:"Obtain controller authorization before engaging a new sub-processor; flow down data protection obligations.",gap:"Sub-processors engaged without controller authorization; no data protection clauses in sub-processor contracts."},
-      {id:"A.2.5.9",name:"Change of subcontractor",desc:"Notify the controller in advance of any changes to sub-processors; provide opportunity to object.",gap:"Controllers not notified of sub-processor changes; no prior notice mechanism."},
+      {id:"A.2.5.2",name:"Basis for PII transfer",desc:"Identify and document the legal basis for any transfer of PII to a third country.",gap:"Sub-processor transfers not mapped to legal transfer mechanism.",
+       explanation:"The processor must identify and document the legal transfer mechanism for any transfer of PII to a third country through its sub-processors. Sub-processor transfers must be covered by SCCs, adequacy decisions, or other recognised safeguards, and must be explicitly authorised by the controller.",
+       docs:["International transfer register (sub-processor level)","SCCs executed with sub-processors","Transfer Impact Assessments","Controller authorisation records for international transfers"]},
+      {id:"A.2.5.3",name:"Countries for PII transfer",desc:"Document countries/international organizations to which PII is transferred.",gap:"Data residency commitments made but not enforced; sub-processor locations undocumented.",
+       explanation:"The processor must document all countries to which PII is transferred through its sub-processors and make this information available to controllers. Data residency requirements specified in the DPA must be contractually enforced with sub-processors and periodically verified.",
+       docs:["Sub-processor location register","Data residency compliance evidence","DPA geographic restriction clauses","Sub-processor international transfer records"]},
+      {id:"A.2.5.4",name:"Records of PII disclosures",desc:"Maintain records of all disclosures of PII to third parties.",gap:"Disclosure log not maintained at processor level.",
+       explanation:"The processor must maintain a log of all PII disclosures made to third parties — including sub-processors and regulatory or government bodies — and provide this log to the controller upon request. Each entry must capture the recipient, purpose, date, categories of PII, and legal basis for disclosure.",
+       docs:["Disclosure log (maintained at processor level)","Sub-processor disclosure records","Regulatory and law enforcement disclosure records","Controller-accessible disclosure register"]},
+      {id:"A.2.5.5",name:"Notification of PII disclosure requests",desc:"Notify the controller before disclosing PII to a third party where legally permitted.",gap:"No process to notify controllers of government/law enforcement access requests.",
+       explanation:"When the processor receives a third-party request to disclose PII, it must notify the controller before disclosing, where legally permitted. The processor must not make disclosures on behalf of the controller without prior controller notification unless legally compelled without any notification option.",
+       docs:["Third-party disclosure procedure","Controller notification procedure","Disclosure request log","Legal review records for disclosure requests"]},
+      {id:"A.2.5.6",name:"Legally binding PII disclosures",desc:"Where legally compelled to disclose PII, notify the controller where permitted and record the disclosure.",gap:"Disclosures made without notifying controller; no legal review process.",
+       explanation:"Where the processor is legally compelled to disclose PII without notifying the controller (e.g., under a court order with a gag provision), it must record the disclosure and notify the controller as soon as legally permitted. A legal review process must govern all compelled disclosures to verify their legality.",
+       docs:["Compelled disclosure procedure","Legal review records","Disclosure log with legal basis","Post-restriction notification records sent to controllers"]},
+      {id:"A.2.5.7",name:"Disclosure of subcontractors",desc:"Disclose to the controller the identity and location of all sub-processors used.",gap:"Sub-processor list not maintained or shared with controllers.",
+       explanation:"The processor must maintain a current, accurate register of all sub-processors and proactively provide it to controllers. The register must include each sub-processor's name, location, and the processing activities they perform. Updates must be provided proactively whenever sub-processors are added, changed, or removed.",
+       docs:["Sub-processor register (name, location, processing activity)","DPA sub-processor disclosure clauses","Sub-processor change notification records","Proactive disclosure communications to controllers"]},
+      {id:"A.2.5.8",name:"Engagement of a subcontractor",desc:"Obtain controller authorization before engaging a new sub-processor; flow down data protection obligations.",gap:"Sub-processors engaged without controller authorization; no data protection clauses in sub-processor contracts.",
+       explanation:"The processor must obtain explicit prior authorisation from the controller before engaging any new sub-processor. Sub-processor contracts must impose data protection obligations equivalent to those in the controller DPA through a contractual flow-down mechanism. Due diligence on sub-processors must be documented.",
+       docs:["Controller authorisation records for each sub-processor","Sub-processor DPAs","Sub-processor due diligence records","Sub-processor contract register"]},
+      {id:"A.2.5.9",name:"Change of subcontractor",desc:"Notify the controller in advance of any changes to sub-processors; provide opportunity to object.",gap:"Controllers not notified of sub-processor changes; no prior notice mechanism.",
+       explanation:"The processor must give the controller advance written notice (typically at least 30 days) of any intended changes to sub-processors, including additions and replacements. The controller must have the opportunity to object, and the processor must not proceed with the change if a valid objection is raised within the notice period.",
+       docs:["Sub-processor change notification procedure","Advance notice communications to controllers","Controller response and objection records","Sub-processor change register"]},
     ]},
   ],
   a3:[
     {domain:"A.3 — Shared information security controls",controls:[
-      {id:"A.3.3",name:"Information security policies",desc:"Policies must explicitly address privacy and PII protection.",gap:"Security policy exists but does not reference PII handling or privacy obligations."},
-      {id:"A.3.4",name:"Security roles",desc:"Define privacy-relevant security roles; ensure DPO/privacy officer interactions.",gap:"No defined DPO or privacy officer; security and privacy responsibilities unclear."},
-      {id:"A.3.5",name:"Classification of information",desc:"PII must be classified appropriately to drive correct handling controls.",gap:"PII not identified as a classification tier; handled the same as general business data."},
-      {id:"A.3.6",name:"Labelling of information",desc:"Label PII-containing assets so handling controls are applied consistently.",gap:"No labelling scheme applied to datasets, files, or systems containing PII."},
-      {id:"A.3.7",name:"Information transfer",desc:"Controls on transferring PII between systems, people, and organizations.",gap:"PII sent by email without encryption; no approved transfer channels policy."},
-      {id:"A.3.8",name:"Identity management",desc:"Manage identities of all personnel with access to PII systems.",gap:"Joiners/movers/leavers process does not include PII system access review."},
-      {id:"A.3.9",name:"Access rights",desc:"Restrict access to PII on a need-to-know/least-privilege basis.",gap:"Overly broad access to PII systems; no periodic access review."},
-      {id:"A.3.10",name:"Supplier agreements",desc:"Supplier/vendor contracts must include appropriate privacy and data protection clauses.",gap:"Vendor contracts do not include DPA or privacy obligations."},
-      {id:"A.3.11",name:"Incident management",desc:"Privacy breaches must be identified, reported, and managed within required timeframes.",gap:"Incident process does not distinguish personal data breaches; no 72-hour notification procedure."},
-      {id:"A.3.12",name:"Security incident response",desc:"Incident response plans must cover personal data breaches; 72-hour GDPR notification built in.",gap:"IR plan has no privacy breach section; DPA notification not in scope."},
-      {id:"A.3.13",name:"Legal and regulatory requirements",desc:"Identify and comply with all applicable privacy laws and regulations.",gap:"No register of applicable privacy laws; GDPR obligations not formally tracked."},
-      {id:"A.3.14",name:"Protection of records",desc:"Records containing PII must be protected against unauthorized access, loss, or destruction.",gap:"Retention/disposal of PII records not formally managed."},
-      {id:"A.3.15",name:"Independent review",desc:"Periodic independent review of PIMS and privacy controls (internal or external audit).",gap:"No privacy audit programme; privacy controls not in internal audit scope."},
-      {id:"A.3.16",name:"Compliance with policies",desc:"Monitor and verify compliance with privacy policies and procedures.",gap:"No ongoing privacy compliance monitoring; reliance on periodic manual checks."},
-      {id:"A.3.17",name:"Security awareness and training",desc:"Privacy training included in security awareness; role-based training for high-risk roles.",gap:"Security awareness training does not cover privacy; no role-specific privacy training."},
-      {id:"A.3.18",name:"Confidentiality agreements",desc:"All personnel with access to PII must sign confidentiality/NDA agreements.",gap:"Confidentiality agreements do not specifically reference personal data obligations."},
-      {id:"A.3.19",name:"Clear desk and clear screen",desc:"PII-containing documents and screen displays must be protected when unattended.",gap:"No clear desk policy; PII visible on unattended screens in open-plan offices."},
-      {id:"A.3.20",name:"Storage media",desc:"Removable media containing PII must be controlled; disposal must be secure.",gap:"Uncontrolled use of USB drives; no secure disposal process for removable media."},
-      {id:"A.3.21",name:"Secure disposal of equipment",desc:"Equipment that held PII must be securely wiped before disposal or reuse.",gap:"No certificate of destruction; equipment disposed of without verified data wiping."},
-      {id:"A.3.22",name:"User endpoint devices",desc:"Endpoints with access to PII must have appropriate security controls (encryption, MDM, screen lock).",gap:"Endpoints without full-disk encryption; no MDM enforcement; BYOD unmanaged."},
-      {id:"A.3.23",name:"Secure authentication",desc:"Strong authentication controls for systems processing PII; MFA recommended.",gap:"No MFA on systems processing PII; shared credentials in use."},
-      {id:"A.3.24",name:"Information backup",desc:"Backups of PII-containing systems must be protected with equivalent controls to primary systems.",gap:"Backups not encrypted; backup access not restricted; restore not tested."},
-      {id:"A.3.25",name:"Logging",desc:"Access to and processing of PII must be logged; logs protected against tampering.",gap:"No audit logging of PII access; logs not retained for required period."},
-      {id:"A.3.26",name:"Use of cryptography",desc:"Encryption at rest and in transit for PII; key management procedures documented.",gap:"No encryption at rest; ad hoc key management; no documented crypto policy."},
-      {id:"A.3.27",name:"Secure development life cycle",desc:"Privacy by design embedded in SDLC; privacy requirements defined before development begins.",gap:"No privacy requirements in user stories; no privacy review gate in SDLC."},
-      {id:"A.3.28",name:"Application security",desc:"Applications processing PII must be tested for security vulnerabilities.",gap:"No DAST/SAST; penetration testing does not cover PII-handling applications."},
-      {id:"A.3.29",name:"Secure system architecture",desc:"System architecture must segregate PII and support least-privilege principle.",gap:"PII co-mingled with non-PII data; no network segmentation for PII systems."},
-      {id:"A.3.30",name:"Outsourced development",desc:"Privacy and security requirements must be flowed into outsourced development contracts.",gap:"Development contracts do not include privacy or data handling requirements."},
-      {id:"A.3.31",name:"Test information",desc:"Live PII must not be used in test environments without authorization and equivalent controls.",gap:"Live PII used in non-production environments without authorisation or equivalent controls."},
+      {id:"A.3.3",name:"Information security policies",desc:"Policies must explicitly address privacy and PII protection.",gap:"Security policy exists but does not reference PII handling or privacy obligations.",
+       explanation:"Information security policies must explicitly address PII protection, privacy obligations, and the PIMS requirements of the organisation. Policies must be approved by management, communicated to all relevant staff, and reviewed at planned intervals or when significant changes occur to the organisation's processing activities or legal obligations.",
+       docs:["Information security policy (with explicit PII and privacy clauses)","Internal privacy policy","Policy review and management approval records","Policy communication and staff acknowledgement records"]},
+      {id:"A.3.4",name:"Security roles",desc:"Define privacy-relevant security roles; ensure DPO/privacy officer interactions.",gap:"No defined DPO or privacy officer; security and privacy responsibilities unclear.",
+       explanation:"Privacy-relevant roles must be clearly defined, documented, and assigned, including a Data Protection Officer (DPO) where legally required, privacy champions, and security roles with PII responsibilities. The interaction and escalation path between security and privacy functions must be documented to prevent gaps in accountability.",
+       docs:["Roles and responsibilities matrix","DPO appointment record and registration with supervisory authority","Job descriptions for privacy and security roles","RACI chart for privacy activities"]},
+      {id:"A.3.5",name:"Classification of information",desc:"PII must be classified appropriately to drive correct handling controls.",gap:"PII not identified as a classification tier; handled the same as general business data.",
+       explanation:"The information classification scheme must include PII as a distinct classification tier or sub-category with defined handling requirements reflecting its sensitivity. All data assets containing PII must be identified, classified, and subject to handling controls appropriate to their classification level.",
+       docs:["Information classification policy","Data classification scheme (with PII tier defined)","Asset register with classification applied","Handling instructions per classification level"]},
+      {id:"A.3.6",name:"Labelling of information",desc:"Label PII-containing assets so handling controls are applied consistently.",gap:"No labelling scheme applied to datasets, files, or systems containing PII.",
+       explanation:"PII-containing assets — including documents, datasets, files, emails, and systems — must be labelled in accordance with the information classification scheme. Labelling enables staff and automated systems to apply correct handling controls. Technical labelling tools such as DLP sensitivity labels should be used where practicable.",
+       docs:["Information labelling policy","Labelling scheme documentation","Technical labelling implementation records (DLP, sensitivity labels)","Labelling compliance audit records"]},
+      {id:"A.3.7",name:"Information transfer",desc:"Controls on transferring PII between systems, people, and organizations.",gap:"PII sent by email without encryption; no approved transfer channels policy.",
+       explanation:"Controls must govern all transfers of PII between internal systems, employees, and external organisations. Approved transfer channels must be defined and enforced by policy and, where possible, by technical controls. Unapproved channels — such as unencrypted email or consumer cloud storage services — must be explicitly prohibited.",
+       docs:["Information transfer policy","Approved transfer channels list","Encryption requirements for PII in transit","Secure file transfer procedure","Email security and encryption controls documentation"]},
+      {id:"A.3.8",name:"Identity management",desc:"Manage identities of all personnel with access to PII systems.",gap:"Joiners/movers/leavers process does not include PII system access review.",
+       explanation:"The joiners, movers, and leavers (JML) process must include timely provisioning and de-provisioning of access to systems processing PII. All identities with access to PII systems must be registered, authenticated appropriately, and reviewed periodically to ensure access remains appropriate and necessary.",
+       docs:["Identity management policy","JML procedure (explicitly covering PII systems)","Identity register","Access provisioning and de-provisioning records","Periodic identity review records"]},
+      {id:"A.3.9",name:"Access rights",desc:"Restrict access to PII on a need-to-know/least-privilege basis.",gap:"Overly broad access to PII systems; no periodic access review.",
+       explanation:"Access to PII must be restricted on a need-to-know, least-privilege basis. Business justification must be documented for all access grants to PII systems. Access rights must be reviewed at least annually, and any access that is no longer required must be promptly revoked and documented.",
+       docs:["Access control policy","Role-based access control (RBAC) documentation","Access request and approval records","Periodic access review records","Access revocation and off-boarding records"]},
+      {id:"A.3.10",name:"Supplier agreements",desc:"Supplier/vendor contracts must include appropriate privacy and data protection clauses.",gap:"Vendor contracts do not include DPA or privacy obligations.",
+       explanation:"All supplier and vendor agreements where PII is shared, accessible, or processed must include appropriate data protection clauses. Where the supplier acts as a processor, a DPA is mandatory. Third-party risk management must incorporate privacy and security assessments prior to engagement and at defined intervals thereafter.",
+       docs:["Supplier contracts with DPA and data protection clauses","Supplier privacy and security assessment records","Third-party risk register","Sub-processor agreements"]},
+      {id:"A.3.11",name:"Incident management",desc:"Privacy breaches must be identified, reported, and managed within required timeframes.",gap:"Incident process does not distinguish personal data breaches; no 72-hour notification procedure.",
+       explanation:"The incident management process must include a specific category and handling path for personal data breaches, distinguishing them from general security incidents. The process must cover identification, containment, risk assessment, regulatory notification within 72 hours where required, individual notification, and post-incident review.",
+       docs:["Incident management policy","Personal data breach procedure","Breach notification templates (regulator and individuals)","Breach register and incident log","Post-incident review records"]},
+      {id:"A.3.12",name:"Security incident response",desc:"Incident response plans must cover personal data breaches; 72-hour GDPR notification built in.",gap:"IR plan has no privacy breach section; DPA notification not in scope.",
+       explanation:"The security incident response plan must explicitly cover personal data breach scenarios, with defined steps for 72-hour regulatory notification under GDPR. The plan must define roles, escalation paths, evidence preservation, and communication procedures specific to privacy breach events. Tabletop exercises must test privacy breach scenarios.",
+       docs:["Incident response plan (with dedicated privacy breach section)","Breach notification procedure","Security incident response playbooks (privacy scenarios)","Regulator notification records","Tabletop exercise records covering privacy breach scenarios"]},
+      {id:"A.3.13",name:"Legal and regulatory requirements",desc:"Identify and comply with all applicable privacy laws and regulations.",gap:"No register of applicable privacy laws; GDPR obligations not formally tracked.",
+       explanation:"The organisation must identify and maintain a register of all applicable privacy laws and regulations relevant to its operations — including GDPR, UK GDPR, and sector-specific or jurisdiction-specific requirements. Compliance obligations must be tracked, assigned to responsible owners, and reviewed whenever relevant laws are updated.",
+       docs:["Privacy law and regulation register","Regulatory compliance tracker","DPA registration or notification records","Legal review records for new processing activities"]},
+      {id:"A.3.14",name:"Protection of records",desc:"Records containing PII must be protected against unauthorized access, loss, or destruction.",gap:"Retention/disposal of PII records not formally managed.",
+       explanation:"Records containing PII must be protected throughout their lifecycle against unauthorised access, loss, alteration, and destruction. Protection controls must apply to both digital records (access controls, encryption, backup) and physical records (locked cabinets, restricted access, secure storage areas).",
+       docs:["Records management policy","Records retention and protection schedule","Physical security controls documentation","Digital records access controls documentation","Backup and recovery records"]},
+      {id:"A.3.15",name:"Independent review",desc:"Periodic independent review of PIMS and privacy controls (internal or external audit).",gap:"No privacy audit programme; privacy controls not in internal audit scope.",
+       explanation:"The PIMS and its privacy controls must be subject to periodic independent review through internal audit or external assessment. Review scope must include policy compliance, control effectiveness, and alignment with current legal requirements. Findings must be reported to management and remediation tracked to closure.",
+       docs:["Privacy audit programme","Internal audit reports (with privacy scope)","External assessment or certification reports","Management review records","Audit finding remediation tracker"]},
+      {id:"A.3.16",name:"Compliance with policies",desc:"Monitor and verify compliance with privacy policies and procedures.",gap:"No ongoing privacy compliance monitoring; reliance on periodic manual checks.",
+       explanation:"Ongoing mechanisms must exist to monitor and verify compliance with privacy policies and procedures. This includes technical controls monitoring, policy exception management, periodic compliance assessments by process owners, and privacy KPIs reported to management on a defined cadence.",
+       docs:["Privacy compliance monitoring procedure","Policy compliance reports","Technical monitoring and alerting records","Exception management register","Privacy KPI or KRI dashboard"]},
+      {id:"A.3.17",name:"Security awareness and training",desc:"Privacy training included in security awareness; role-based training for high-risk roles.",gap:"Security awareness training does not cover privacy; no role-specific privacy training.",
+       explanation:"All staff must receive privacy and data protection training as part of the security awareness programme. Staff in roles with significant PII responsibilities — including HR, marketing, IT, legal, and customer service — must receive role-specific privacy training covering their particular obligations. Completion must be tracked and records retained.",
+       docs:["Security awareness training programme (with privacy content)","Role-specific privacy training materials","Training completion records","Training content review log","Training effectiveness assessment records"]},
+      {id:"A.3.18",name:"Confidentiality agreements",desc:"All personnel with access to PII must sign confidentiality/NDA agreements.",gap:"Confidentiality agreements do not specifically reference personal data obligations.",
+       explanation:"All personnel — employees, contractors, and third parties — with access to PII must be bound by confidentiality agreements that specifically reference personal data and privacy obligations. Generic NDAs without explicit reference to PII handling obligations are insufficient. Signed agreements must be retained for audit purposes.",
+       docs:["Confidentiality agreements or NDAs (with explicit PII references)","Employment contract confidentiality clauses","Third-party confidentiality agreements","Signed agreement register"]},
+      {id:"A.3.19",name:"Clear desk and clear screen",desc:"PII-containing documents and screen displays must be protected when unattended.",gap:"No clear desk policy; PII visible on unattended screens in open-plan offices.",
+       explanation:"A clear desk policy must require that documents, notes, and media containing PII are secured when workstations are unattended. A clear screen policy must require that computers and devices are locked when left unattended, preventing unauthorised viewing of PII. Compliance should be verified through periodic physical audits.",
+       docs:["Clear desk and clear screen policy","Physical security controls documentation","Screen lock configuration and enforcement records","Policy compliance audit records"]},
+      {id:"A.3.20",name:"Storage media",desc:"Removable media containing PII must be controlled; disposal must be secure.",gap:"Uncontrolled use of USB drives; no secure disposal process for removable media.",
+       explanation:"All removable media — USB drives, portable hard drives, optical discs — that may contain PII must be subject to formal controls. Authorised media must be tracked in an asset register, encrypted where technically feasible, and securely disposed of at end of life. Use of unapproved removable media should be restricted by technical controls such as DLP.",
+       docs:["Removable media policy","Media asset register","Encryption controls for removable media","Media disposal procedure and records","DLP or technical restriction controls documentation"]},
+      {id:"A.3.21",name:"Secure disposal of equipment",desc:"Equipment that held PII must be securely wiped before disposal or reuse.",gap:"No certificate of destruction; equipment disposed of without verified data wiping.",
+       explanation:"All IT equipment and physical media that stored PII — laptops, servers, smartphones, printers, hard drives — must be securely wiped or physically destroyed before disposal, repurposing, or return to vendors. A certificate of data destruction must be obtained, particularly for third-party disposal providers. The entire process must be documented.",
+       docs:["Equipment disposal procedure","Certificate of data destruction","Asset disposal register","Third-party disposal contracts","Data wiping verification records"]},
+      {id:"A.3.22",name:"User endpoint devices",desc:"Endpoints with access to PII must have appropriate security controls (encryption, MDM, screen lock).",gap:"Endpoints without full-disk encryption; no MDM enforcement; BYOD unmanaged.",
+       explanation:"All endpoint devices — laptops, smartphones, tablets — used to access or store PII must have full-disk encryption, enforced screen lock, remote wipe capability, and where applicable mobile device management (MDM). A BYOD policy must specifically address the handling of PII on personal devices, including acceptable use and remote wipe consent.",
+       docs:["Endpoint security policy","MDM configuration and enrolment records","Full-disk encryption deployment records","BYOD policy","Endpoint compliance monitoring records"]},
+      {id:"A.3.23",name:"Secure authentication",desc:"Strong authentication controls for systems processing PII; MFA recommended.",gap:"No MFA on systems processing PII; shared credentials in use.",
+       explanation:"Systems processing PII must enforce strong authentication controls. Multi-factor authentication (MFA) is strongly recommended for all systems with PII access. Password policies must define minimum complexity, length, and rotation requirements. Shared credentials must be eliminated and all default vendor passwords changed at deployment.",
+       docs:["Authentication policy","MFA deployment and enrolment records","Password policy","Privileged access management (PAM) documentation","Authentication system configuration records"]},
+      {id:"A.3.24",name:"Information backup",desc:"Backups of PII-containing systems must be protected with equivalent controls to primary systems.",gap:"Backups not encrypted; backup access not restricted; restore not tested.",
+       explanation:"Backup copies of PII-containing systems and datasets must be protected with security controls equivalent to those on primary systems, including encryption at rest, restricted access, and integrity verification. Backup restoration must be tested regularly to confirm recoverability and that security controls remain effective on restored data.",
+       docs:["Backup policy","Backup encryption configuration records","Backup access control records","Backup restoration test records","Backup schedule and retention documentation"]},
+      {id:"A.3.25",name:"Logging",desc:"Access to and processing of PII must be logged; logs protected against tampering.",gap:"No audit logging of PII access; logs not retained for required period.",
+       explanation:"Access to and processing of PII must be logged with sufficient detail to support security monitoring and forensic investigation — recording who accessed what, when, from where, and what action was taken. Logs must be protected against tampering, retained for an appropriate period, and reviewed regularly for anomalies.",
+       docs:["Logging and monitoring policy","Audit log configuration records","Log retention schedule","SIEM or log review records","Log integrity controls documentation"]},
+      {id:"A.3.26",name:"Use of cryptography",desc:"Encryption at rest and in transit for PII; key management procedures documented.",gap:"No encryption at rest; ad hoc key management; no documented crypto policy.",
+       explanation:"A cryptography policy must specify approved algorithms, minimum key lengths, and key management requirements for protecting PII at rest and in transit. Encryption must be applied to PII in databases, files, backups, and portable media. Key management procedures must cover the full lifecycle: generation, storage, rotation, and destruction.",
+       docs:["Cryptography policy","Encryption implementation records (at rest and in transit)","Key management procedure","Certificate management records","Cryptographic controls audit records"]},
+      {id:"A.3.27",name:"Secure development life cycle",desc:"Privacy by design embedded in SDLC; privacy requirements defined before development begins.",gap:"No privacy requirements in user stories; no privacy review gate in SDLC.",
+       explanation:"Privacy by design must be a formal requirement throughout the software development lifecycle. Privacy requirements must be captured before development begins, privacy-focused design reviews must occur at defined gates, and privacy testing must be completed and signed off before release of any system processing PII.",
+       docs:["Secure SDLC policy","Privacy requirements template","Privacy design review gate records","Privacy testing records","SDLC gate approval records (privacy sign-off)"]},
+      {id:"A.3.28",name:"Application security",desc:"Applications processing PII must be tested for security vulnerabilities.",gap:"No DAST/SAST; penetration testing does not cover PII-handling applications.",
+       explanation:"Applications that process PII must be tested for security vulnerabilities using appropriate methods — static analysis (SAST), dynamic analysis (DAST), and penetration testing. Vulnerabilities with privacy implications must be remediated before deployment. Security testing must be repeated after significant changes and at defined intervals.",
+       docs:["Application security testing policy","Penetration test reports","SAST and DAST scan results","Vulnerability remediation records","Security testing schedule"]},
+      {id:"A.3.29",name:"Secure system architecture",desc:"System architecture must segregate PII and support least-privilege principle.",gap:"PII co-mingled with non-PII data; no network segmentation for PII systems.",
+       explanation:"System and network architecture must be designed to segregate PII from non-PII data where practicable, applying least-privilege at the infrastructure level. Network segmentation, micro-segmentation, or zero-trust architecture should be applied to systems and networks processing PII to minimise the blast radius of potential breaches.",
+       docs:["System architecture documentation","Network segmentation records","Security architecture review records","Data flow diagrams (showing PII flows)","Zero-trust or network segmentation implementation documentation"]},
+      {id:"A.3.30",name:"Outsourced development",desc:"Privacy and security requirements must be flowed into outsourced development contracts.",gap:"Development contracts do not include privacy or data handling requirements.",
+       explanation:"Where software or system development is outsourced, contracts must include explicit privacy and security requirements, developer access controls, code review rights, confidentiality obligations, and prohibition on retention of or access to production PII. The organisation must verify compliance with these requirements.",
+       docs:["Outsourced development contracts (with privacy and security clauses)","Developer access controls documentation","Code review records","Confidentiality agreements with external developers","Developer security requirements specification"]},
+      {id:"A.3.31",name:"Test information",desc:"Live PII must not be used in test environments without authorization and equivalent controls.",gap:"Live PII used in non-production environments without authorisation or equivalent controls.",
+       explanation:"Live PII must not be used in test, development, or staging environments without explicit management authorisation and implementation of security controls equivalent to production. The preferred approach is to use anonymised, pseudonymised, or synthetically generated test data. Where live PII is exceptionally required, access must be restricted and all controls documented.",
+       docs:["Test data policy","Test data anonymisation or synthetic data generation procedure","Authorisation records for any use of live PII in testing","Test environment access controls documentation","Test data classification and handling records"]},
     ]},
   ]
 };
@@ -370,6 +587,17 @@ function renderPanel(tab){
           <div class="ctrl-name">${c.name}</div>
           <div class="ctrl-desc">${c.desc}</div>
           ${st==='none'?`<div class="ctrl-gap">⚠ Common gap: ${c.gap}</div>`:''}
+          <button class="ctrl-detail-btn" onclick="toggleDetail('${c.id}',this)" aria-expanded="false">▸ Details</button>
+          <div class="ctrl-detail" id="detail-${c.id}" hidden>
+            <div class="ctrl-detail-section">
+              <div class="ctrl-detail-label">Requirement</div>
+              <div class="ctrl-detail-text">${c.explanation}</div>
+            </div>
+            <div class="ctrl-detail-section">
+              <div class="ctrl-detail-label">Expected documents</div>
+              <ul class="ctrl-detail-docs">${c.docs.map(d=>`<li>${d}</li>`).join('')}</ul>
+            </div>
+          </div>
         </div>
         <div class="ctrl-status">
           <button class="status-btn${st==='impl'?' active-impl':''}" onclick="setStatus('${c.id}','impl')" title="Implemented" aria-pressed="${st==='impl'}">✅</button>
@@ -436,6 +664,15 @@ function exportCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 
+function toggleDetail(id,btn){
+  const el=document.getElementById('detail-'+id);
+  if(!el)return;
+  const open=!el.hidden;
+  el.hidden=open;
+  btn.textContent=open?'▸ Details':'▾ Details';
+  btn.setAttribute('aria-expanded',!open);
+}
+
 function resetAll(){
   if(!confirm('Reset all ratings? This cannot be undone.'))return;
   state={};saveState();renderAll();updateSummary();updateBadges();
@@ -445,6 +682,59 @@ loadState();
 setRole(role);
 updateSummary();
 updateBadges();
+
+// — Email gate —
+const GATE_KEY = 'iso27701_gate_v1';
+const SUPABASE_URL = 'https://ejnjmagvbsaotradediu.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqbmptYWd2YnNhb3RyYWRlZGl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTc1ODUsImV4cCI6MjA5NTE5MzU4NX0._7W9pI5rcGm5GVC-dffpqlkbeoiLFCR84hO0x4fr9UQ';
+const GATE_TABLE = 'ISO27001-gap-assessment-registration';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+function initGate() {
+  if (localStorage.getItem(GATE_KEY)) {
+    document.getElementById('gate-overlay').classList.add('hidden');
+  } else {
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+document.getElementById('gate-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const name  = document.getElementById('gate-name').value.trim();
+  const org   = document.getElementById('gate-org').value.trim();
+  const email = document.getElementById('gate-email').value.trim();
+  const errEl = document.getElementById('gate-error');
+  const btn   = document.getElementById('gate-btn');
+
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Please enter your name.'; errEl.style.display = 'block'; return; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Please wait…';
+
+  try {
+    const { error } = await db.from(GATE_TABLE).insert({
+      full_name:    name,
+      organisation: org || null,
+      email,
+      user_agent:   navigator.userAgent.slice(0, 255),
+      referrer:     document.referrer.slice(0, 255) || null
+    });
+    if (error) throw error;
+    localStorage.setItem(GATE_KEY, '1');
+    document.getElementById('gate-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Access the tool →';
+    errEl.textContent = 'Something went wrong. Please try again.';
+    errEl.style.display = 'block';
+  }
+});
+
+initGate();
 </script>
 </body>
 </html>
